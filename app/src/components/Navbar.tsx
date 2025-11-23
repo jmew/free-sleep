@@ -127,6 +127,8 @@ export default function Navbar() {
               icon={ icon }
               aria-label={ title }
               sx={ {
+                minWidth: 0,
+                padding: '6px 0',
                 '&.Mui-selected': {
                   color: theme.palette.grey[100],
                 },

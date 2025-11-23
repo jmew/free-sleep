@@ -62,6 +62,17 @@ const settingsDB = new Low<Settings>(file, defaultData);
 await settingsDB.read();
 // Allows us to add default values to the settings if users have existing settingsDB.json data
 settingsDB.data = _.merge({}, defaultData, settingsDB.data);
+
+// Migration: Force update quadTap from 'alarm' to 'base_control' if it's the old default
+if (settingsDB.data.left.taps.quadTap.type === 'alarm') {
+  const baseControlTap = {
+    type: 'base_control' as const,
+    behavior: 'toggle_preset' as const,
+  };
+  settingsDB.data.left.taps.quadTap = baseControlTap;
+  settingsDB.data.right.taps.quadTap = baseControlTap;
+}
+
 await settingsDB.write();
 
 export default settingsDB;

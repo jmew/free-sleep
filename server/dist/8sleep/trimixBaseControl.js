@@ -304,15 +304,16 @@ export class TriMixBaseControl {
                 .replace(/\u0001.*?\u0002/g, '') // Remove other control sequences
                 .replace(/\r/g, '') // Remove carriage returns
                 .replace(/[[^\\\]]*]/g, ''); // Remove any remaining bracket sequences
-            // Extract hex pairs only from notification data lines that contain hex data
-            // Allow for various prefixes (# + spaces, just spaces, etc.)
-            if (cleanLine.match(/^[#\s]*[0-9a-fA-F]{2}( [0-9a-fA-F]{2})*\s+.*$/)) {
-                const hexPairs = cleanLine.match(/[0-9a-fA-F]{2}/g);
-                if (hexPairs) {
-                    const newBytes = hexPairs.map((s) => parseInt(s, 16));
-                    this.notificationBuffer.push(...newBytes);
-                    this.processNotificationBuffer();
-                }
+            // Extract hex pairs from the line.
+            // We match any sequence of 2 hex digits.
+            // The processNotificationBuffer logic handles framing (finding 0xff 0xff 0xff 0xff header) and validation.
+            const hexPairs = cleanLine.match(/\b[0-9a-fA-F]{2}\b/g);
+            if (hexPairs) {
+                // Filter out likely non-data hex (e.g. '0x' prefix if somehow separated, or other noise)
+                // But strict 2-digit hex matching \b[0-9a-fA-F]{2}\b is usually safe enough given the buffer validation.
+                const newBytes = hexPairs.map((s) => parseInt(s, 16));
+                this.notificationBuffer.push(...newBytes);
+                this.processNotificationBuffer();
             }
         }
     }

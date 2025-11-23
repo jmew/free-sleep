@@ -47,6 +47,8 @@ export class FrankenMonitor {
 
   private async processGesture(side: Side, gesture: Gesture) {
     const behavior = settingsDB.data[side].taps[gesture];
+    logger.debug(`[processGesture] side: ${side}, gesture: ${gesture}, type: ${behavior.type}`);
+    
     if (behavior.type === 'temperature') {
       const currentTemperatureTarget = this.deviceStatus![side].targetTemperatureF;
       let newTemperatureTargetF;

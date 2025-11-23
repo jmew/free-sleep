@@ -32,10 +32,8 @@ const defaultSideSettings: SideSettings = {
       amount: 1,
     },
     quadTap: {
-      type: 'alarm',
-      behavior: 'dismiss',
-      snoozeDuration: 60,
-      inactiveAlarmBehavior: 'power',
+      type: 'base_control',
+      behavior: 'toggle_preset',
     },
   }
 };

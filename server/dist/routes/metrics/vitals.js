@@ -1,5 +1,3 @@
-
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="7ff9ac2e-1060-508f-8dd4-ed27f17b6fdc")}catch(e){}}();
 import express from 'express';
 import moment from 'moment-timezone';
 import settingsDB from '../../db/settings.js';
@@ -12,10 +10,14 @@ router.get('/vitals', async (req, res) => {
     if (side)
         query.side = side;
     query.timestamp = {};
-    if (startTime)
+    if (startTime) {
+        // @ts-ignore
         query.timestamp.gte = moment(startTime).unix();
-    if (endTime)
+    }
+    if (endTime) {
+        // @ts-ignore
         query.timestamp.lte = moment(endTime).unix();
+    }
     // Use Prisma's generated type for the records
     const vitals = await prisma.vitals.findMany({
         where: query,
@@ -31,10 +33,14 @@ router.get('/vitals/summary', async (req, res) => {
     if (side)
         query.side = side;
     query.timestamp = {};
-    if (startTime)
+    if (startTime) {
+        // @ts-ignore
         query.timestamp.gte = moment(startTime).unix();
-    if (endTime)
+    }
+    if (endTime) {
+        // @ts-ignore
         query.timestamp.lte = moment(endTime).unix();
+    }
     // Query: Min & Max Heart Rate
     const heartRateSummary = await prisma.vitals.aggregate({
         where: query,
@@ -68,4 +74,3 @@ router.get('/vitals/summary', async (req, res) => {
 });
 export default router;
 //# sourceMappingURL=vitals.js.map
-//# debugId=7ff9ac2e-1060-508f-8dd4-ed27f17b6fdc

@@ -1,5 +1,3 @@
-
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="f87d278a-9345-5986-93c0-6b6e1923886e")}catch(e){}}();
 import schedule from 'node-schedule';
 import logger from '../logger.js';
 import { updateDeviceStatus } from '../routes/deviceStatus/updateDeviceStatus.js';
@@ -85,4 +83,3 @@ export const schedulePrimingRebootAndCalibration = (settingsData) => {
     });
 };
 //# sourceMappingURL=primeScheduler.js.map
-//# debugId=f87d278a-9345-5986-93c0-6b6e1923886e

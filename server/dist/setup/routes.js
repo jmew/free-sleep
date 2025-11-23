@@ -1,5 +1,3 @@
-
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="1b1cf90f-28e6-5477-9b97-06a8d43a585f")}catch(e){}}();
 import * as Sentry from '@sentry/node';
 import express from 'express';
 import path from 'path';
@@ -16,6 +14,7 @@ import movement from '../routes/metrics/movement.js';
 import vitals from '../routes/metrics/vitals.js';
 import logs from '../routes/logs/logs.js';
 import serverStatus from '../routes/serverStatus/serverStatus.js';
+import baseControl from '../routes/baseControl/baseControl.js';
 import logger from '../logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +32,7 @@ export default function (app) {
     app.use('/api/metrics/', vitals);
     app.use('/api/logs', logs);
     app.use('/api/serverStatus', serverStatus);
+    app.use('/api/', baseControl);
     app.use('/api', (req, res) => {
         res.status(404).json({ error: { message: 'Not Found' } });
     });
@@ -65,4 +65,3 @@ export default function (app) {
     logger.debug('Registered routes!');
 }
 //# sourceMappingURL=routes.js.map
-//# debugId=1b1cf90f-28e6-5477-9b97-06a8d43a585f

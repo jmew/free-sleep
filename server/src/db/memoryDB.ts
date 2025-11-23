@@ -10,9 +10,18 @@ type SideState = {
   }
 };
 
+type BaseStatus = {
+  head: number;
+  feet: number;
+  isMoving: boolean;
+  lastUpdate: string;
+  isConfigured: boolean;
+};
+
 type MemoryDB = {
   left: SideState;
   right: SideState;
+  baseStatus?: BaseStatus;
 };
 
 const defaultMemoryDB: MemoryDB = {

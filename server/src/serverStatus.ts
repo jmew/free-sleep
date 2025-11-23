@@ -99,9 +99,9 @@ class ServerStatus {
   async updateDB() {
     try {
       await prisma.$queryRaw`SELECT 1`;
-      const quick = await prisma.$queryRawUnsafe<
-        Array<{ quick_check: string }>
-      >(`PRAGMA quick_check;`);
+      const quick = await prisma.$queryRawUnsafe(
+        `PRAGMA quick_check;`
+      ) as Array<{ quick_check: string }>;
       const quickCheckHealthy = quick?.[0] && Object.values(quick[0])[0] === 'ok';
       if (quickCheckHealthy) {
         this.status.database.status = 'healthy';

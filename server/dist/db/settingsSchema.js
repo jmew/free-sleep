@@ -1,5 +1,3 @@
-
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="f7c415b0-2bec-56be-b72d-bb0b23135cc1")}catch(e){}}();
 import { z } from 'zod';
 import { TIME_ZONES } from './timeZones.js';
 import { TimeSchema } from './schedulesSchema.js';
@@ -16,9 +14,14 @@ const AlarmTapConfig = z.object({
     snoozeDuration: z.number().min(60).max(600),
     inactiveAlarmBehavior: z.enum(['power', 'none'])
 });
+const BaseControlTapConfig = z.object({
+    type: z.literal('base_control'),
+    behavior: z.literal('toggle_preset'),
+});
 export const TapConfig = z.discriminatedUnion('type', [
     TemperatureTapConfig,
     AlarmTapConfig,
+    BaseControlTapConfig
 ]);
 export const GestureSchema = z.enum(['doubleTap', 'tripleTap', 'quadTap']);
 const SideSettingsSchema = z.object({
@@ -54,4 +57,3 @@ export const SettingsSchema = z.object({
     rebootDaily: z.boolean(),
 }).strict();
 //# sourceMappingURL=settingsSchema.js.map
-//# debugId=f7c415b0-2bec-56be-b72d-bb0b23135cc1

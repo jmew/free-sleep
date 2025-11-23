@@ -1,5 +1,3 @@
-
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="e0e3226d-75bc-57dc-a2ce-b489355871f6")}catch(e){}}();
 import { once } from 'events';
 import binarySplit from 'binary-split';
 export class MessageStream {
@@ -40,4 +38,3 @@ export class MessageStream {
     }
 }
 //# sourceMappingURL=messageStream.js.map
-//# debugId=e0e3226d-75bc-57dc-a2ce-b489355871f6

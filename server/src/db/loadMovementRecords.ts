@@ -1,5 +1,5 @@
 // Helper file to load raw movement rows from SQLite and convert the epoch timestamps -> ISO8601
-import { movement as PrismaMovementRecord } from '.prisma/client';
+import { movement as PrismaMovementRecord } from '@prisma/client';
 import settingsDB from './settings.js';
 import moment from 'moment-timezone';
 

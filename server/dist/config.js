@@ -1,5 +1,3 @@
-
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="7f9db221-cffe-506b-9119-22d62709d73e")}catch(e){}}();
 import { existsSync, readFileSync } from 'fs';
 import logger from './logger.js';
 function checkIfDacSockPathConfigured() {
@@ -71,4 +69,3 @@ class Config {
 }
 export default Config.getInstance();
 //# sourceMappingURL=config.js.map
-//# debugId=7f9db221-cffe-506b-9119-22d62709d73e

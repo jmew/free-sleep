@@ -15,6 +15,7 @@ import movement from '../routes/metrics/movement.js';
 import vitals from '../routes/metrics/vitals.js';
 import logs from '../routes/logs/logs.js';
 import serverStatus from '../routes/serverStatus/serverStatus.js';
+import baseControl from '../routes/baseControl/baseControl.js';
 import logger from '../logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -34,6 +35,7 @@ export default function (app: Express) {
   app.use('/api/metrics/', vitals);
   app.use('/api/logs', logs);
   app.use('/api/serverStatus', serverStatus);
+  app.use('/api/', baseControl);
   app.use('/api', (req: Request, res: Response) => {
     res.status(404).json({ error: { message: 'Not Found' } });
   });

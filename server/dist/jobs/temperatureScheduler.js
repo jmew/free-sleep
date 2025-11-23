@@ -1,5 +1,3 @@
-
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="a03a9e7f-1f56-5115-ab06-7794734144b4")}catch(e){}}();
 import schedule from 'node-schedule';
 import { getDayIndexForSchedule, logJob } from './utils.js';
 import { updateDeviceStatus } from '../routes/deviceStatus/updateDeviceStatus.js';
@@ -44,4 +42,3 @@ export const scheduleTemperatures = (settingsData, side, day, temperatures) => {
     });
 };
 //# sourceMappingURL=temperatureScheduler.js.map
-//# debugId=a03a9e7f-1f56-5115-ab06-7794734144b4

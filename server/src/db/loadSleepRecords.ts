@@ -1,5 +1,5 @@
 // Helper file to load raw sleep records from SQLite and convert the epoch timestamps -> ISO8601
-import { sleep_records as PrismaSleepRecord } from '.prisma/client';
+import { sleep_records as PrismaSleepRecord } from '@prisma/client';
 import settingsDB from './settings.js';
 import moment from 'moment-timezone';
 

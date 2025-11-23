@@ -1,5 +1,3 @@
-
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="52d40649-c294-5621-b90d-d1f84da5b8d0")}catch(e){}}();
 import logger from '../logger.js';
 export const DAYS_OF_WEEK = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 export function getDayOfWeekIndex(day) {
@@ -30,4 +28,3 @@ export function logJob(message, side, day, dayIndex, time) {
     logger.debug(`${message} for ${side} side for ${day} -> ${endDay} -- ${endDay} ${timeOfDay} @ ${time}`);
 }
 //# sourceMappingURL=utils.js.map
-//# debugId=52d40649-c294-5621-b90d-d1f84da5b8d0

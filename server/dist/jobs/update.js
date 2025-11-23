@@ -1,5 +1,3 @@
-
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="92befc3e-80f5-5991-8fa5-5b4b2f645cae")}catch(e){}}();
 import { spawn } from 'child_process';
 import logger from '../logger.js';
 export default function update() {
@@ -11,4 +9,3 @@ export default function update() {
     child.unref();
 }
 //# sourceMappingURL=update.js.map
-//# debugId=92befc3e-80f5-5991-8fa5-5b4b2f645cae

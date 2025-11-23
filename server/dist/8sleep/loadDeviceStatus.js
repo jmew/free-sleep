@@ -1,5 +1,3 @@
-
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="f1b8cb97-259e-52a1-a5d7-be9d01baf547")}catch(e){}}();
 import { z } from 'zod';
 import { Version } from '../routes/deviceStatus/deviceStatusSchema.js';
 import logger from '../logger.js';
@@ -198,4 +196,3 @@ export async function loadDeviceStatus(response, getGestures) {
     return deviceStatus;
 }
 //# sourceMappingURL=loadDeviceStatus.js.map
-//# debugId=f1b8cb97-259e-52a1-a5d7-be9d01baf547

@@ -116,7 +116,7 @@ const legAngleMap = new Map([
     [44, 1796],
     [45, 1806],
 ]);
-// --- Ticks-to-Angle Conversion ---
+// --- Ticks-to-Angle conversion ---
 function ticksToAngle(ticks, map) {
     let closestAngle = 0;
     let smallestDiff = Infinity;
@@ -239,7 +239,7 @@ export class TriMixBaseControl {
             logger.error(`bluetoothctl stderr: ${data.toString()}`);
         });
         this.bleProcess.on('close', (code) => {
-            logger.warn(`bluetoothctl process exited with code ${code}. Restarting in 5s.`);
+            logger.warn(`bluetoothctl process exited with code ${code}. Restarting in 5s. `);
             this.bleProcess = null;
             this.isConnected = false;
             this.inGattMenu = false;

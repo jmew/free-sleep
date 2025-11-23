@@ -23,8 +23,14 @@ router.get('/vitals', async (req: Request<object, object, object, VitalsQuery>, 
   if (side) query.side = side;
 
   query.timestamp = {};
-  if (startTime) query.timestamp.gte = moment(startTime).unix();
-  if (endTime) query.timestamp.lte = moment(endTime).unix();
+  if (startTime) {
+    // @ts-ignore
+    query.timestamp.gte = moment(startTime).unix();
+  }
+  if (endTime) {
+    // @ts-ignore
+    query.timestamp.lte = moment(endTime).unix();
+  }
 
 
   // Use Prisma's generated type for the records
@@ -49,8 +55,14 @@ router.get('/vitals/summary', async (req: Request<object, object, object, Vitals
   if (side) query.side = side;
 
   query.timestamp = {};
-  if (startTime) query.timestamp.gte = moment(startTime).unix();
-  if (endTime) query.timestamp.lte = moment(endTime).unix();
+  if (startTime) {
+    // @ts-ignore
+    query.timestamp.gte = moment(startTime).unix();
+  }
+  if (endTime) {
+    // @ts-ignore
+    query.timestamp.lte = moment(endTime).unix();
+  }
 
   // Query: Min & Max Heart Rate
   const heartRateSummary = await prisma.vitals.aggregate({

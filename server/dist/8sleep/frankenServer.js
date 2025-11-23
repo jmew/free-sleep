@@ -1,5 +1,3 @@
-
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="f56fba1c-9657-50ba-b654-081965bd58a4")}catch(e){}}();
 import { SequentialQueue } from './sequentialQueue.js';
 import { MessageStream } from './messageStream.js';
 import { frankenCommands } from './deviceApi.js';
@@ -176,4 +174,3 @@ export async function disconnectFranken() {
     await shutdownFrankenServer();
 }
 //# sourceMappingURL=frankenServer.js.map
-//# debugId=f56fba1c-9657-50ba-b654-081965bd58a4

@@ -1,17 +1,19 @@
-
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="393ca830-5bdf-555c-b1b0-feef86779868")}catch(e){}}();
 import moment from 'moment-timezone';
 import logger from '../logger.js';
 import settingsDB from '../db/settings.js';
+import memoryDB from '../db/memoryDB.js';
 import { connectFranken } from './frankenServer.js';
 import { wait } from './promises.js';
 import { Version } from '../routes/deviceStatus/deviceStatusSchema.js';
 import { GestureSchema } from '../db/settingsSchema.js';
 import { updateDeviceStatus } from '../routes/deviceStatus/updateDeviceStatus.js';
 import serverStatus from '../serverStatus.js';
+import { trimixBase } from './trimixBaseControl.js';
+import { BASE_PRESETS } from './basePresets.js';
 export class FrankenMonitor {
     isRunning;
     deviceStatus;
+    currentBasePreset = 'relax';
     constructor() {
         this.isRunning = false;
         this.deviceStatus = undefined;
@@ -49,6 +51,43 @@ export class FrankenMonitor {
             }
             logger.debug(`Processing gesture temperature change for ${side}. ${currentTemperatureTarget} -> ${newTemperatureTargetF}`);
             return await updateDeviceStatus({ [side]: { targetTemperatureF: newTemperatureTargetF } });
+        }
+        else if (behavior.type === 'base_control') {
+            // Cycle between relax and flat presets
+            this.currentBasePreset =
+                this.currentBasePreset === 'relax' ? 'flat' : 'relax';
+            const targetPreset = BASE_PRESETS[this.currentBasePreset];
+            logger.info(`[quadTap] Cycling base to ${this.currentBasePreset} preset:`, targetPreset);
+            try {
+                // Update memory DB to reflect movement
+                if (memoryDB.data) {
+                    memoryDB.data.baseStatus = {
+                        head: targetPreset.head,
+                        feet: targetPreset.feet,
+                        isMoving: true,
+                        lastUpdate: new Date().toISOString(),
+                        isConfigured: true,
+                    };
+                    await memoryDB.write();
+                }
+                // Control the base via BLE
+                if (this.currentBasePreset === 'flat') {
+                    await trimixBase.goToFlat();
+                }
+                else {
+                    await trimixBase.setPosition({
+                        head: targetPreset.head,
+                        feet: targetPreset.feet,
+                        feedRate: targetPreset.feedRate,
+                    });
+                }
+            }
+            catch (error) {
+                logger.error(`[quadTap] Failed to set base preset: ${error instanceof Error ? error.message : String(error)}`);
+                // Revert preset state on error
+                this.currentBasePreset =
+                    this.currentBasePreset === 'relax' ? 'flat' : 'relax';
+            }
         }
         else if (behavior.type) {
             // TODO: Add alarm handling
@@ -120,4 +159,3 @@ export class FrankenMonitor {
     }
 }
 //# sourceMappingURL=frankenMonitor.js.map
-//# debugId=393ca830-5bdf-555c-b1b0-feef86779868

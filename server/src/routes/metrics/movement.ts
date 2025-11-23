@@ -21,11 +21,11 @@ router.get('/movement', async (req: Request<object, object, object, MovementQuer
 
   if (side) query.side = side;
   if (startTime) {
-    // @ts-expect-error
+    // @ts-ignore
     query.timestamp.gte = moment(startTime).unix();
   }
   if (endTime) {
-    // @ts-expect-error
+    // @ts-ignore
     query.timestamp.lte = moment(endTime).unix();
   }
 

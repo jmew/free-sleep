@@ -6,14 +6,14 @@ export const prisma = new PrismaClient({
   log: ['error', 'warn'],
 });
 
-prisma.$on('error', (event) => {
+prisma.$on('error', (event: { message: string; target?: string }) => {
   logger.error({
     message: event.message,
     target: event.target,
   });
 });
 
-prisma.$on('warn', (event) => {
+prisma.$on('warn', (event: { message: string; target?: string }) => {
   logger.warn({
     message: event.message,
     target: event.target,

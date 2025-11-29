@@ -13,7 +13,7 @@ import { BASE_PRESETS } from './basePresets.js';
 export class FrankenMonitor {
     isRunning;
     deviceStatus;
-    currentBasePreset = 'relax';
+    currentBasePreset = 'flat';
     constructor() {
         this.isRunning = false;
         this.deviceStatus = undefined;

@@ -18,7 +18,7 @@ import { BASE_PRESETS } from './basePresets.js';
 export class FrankenMonitor {
   private isRunning: boolean;
   private deviceStatus?: DeviceStatus;
-  private currentBasePreset: keyof typeof BASE_PRESETS = 'relax';
+  private currentBasePreset: keyof typeof BASE_PRESETS = 'flat';
 
   constructor() {
     this.isRunning = false;

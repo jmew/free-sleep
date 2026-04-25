@@ -49,8 +49,11 @@ const darkTheme = createTheme({
     }
   },
   typography: {
-    // System font stack — gives us SF Pro on Apple devices, native sans elsewhere.
-    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif',
+    // Geist (free, OFL — Vercel) is loaded via Google Fonts in app/index.html.
+    // It's the closest free analog to NeueMontreal (the official Pod app's font);
+    // a modern geometric grotesque. System stack is the offline fallback.
+    fontFamily:
+      '"Geist", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif',
   },
   shape: {
     borderRadius: 12,

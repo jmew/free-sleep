@@ -97,23 +97,38 @@ def _total_duration_seconds(intervals) -> int:
     return int(total_time.total_seconds())
 
 
-def _identify_sleep_intervals(present_intervals: List[Tuple[datetime, datetime]], max_gap_in_minutes: int = 15):
+def _identify_sleep_intervals(
+    present_intervals: List[Tuple[datetime, datetime]],
+    max_gap_in_minutes: int = 15,
+    real_exit_min_minutes: int = 5,
+):
     """
     Identifies sleep periods by merging intervals with small gaps.
 
     Args:
-        present_intervals (list of tuples): List of (start_time, end_time) tuples representing presence periods.
-        max_gap_in_minutes (int, optional): Maximum allowed minutes between intervals before merging them. Defaults to 15.
+        present_intervals: List of (start_time, end_time) tuples representing presence periods.
+        max_gap_in_minutes: Maximum gap between intervals before they're treated as
+            separate sleep sessions. Defaults to 15.
+        real_exit_min_minutes: Minimum gap (within a merged session) to count as an
+            actual bed exit. Smaller gaps are treated as sensor blips (you rolled
+            over, sensor briefly didn't register), not real exits. Defaults to 5.
+            This dramatically reduces false "you woke up" events caused by
+            sub-minute presence-detection dropouts.
 
     Returns:
         list of dicts: A list of detected sleep periods, each containing:
             - 'entered_bed_at': Start time of the sleep period.
             - 'left_bed_at': End time of the sleep period.
-            - 'sleep_period': Total sleep duration.
-            - 'times_exited_bed': Number of times the person exited the bed.
+            - 'sleep_period_seconds': Total sleep duration.
+            - 'times_exited_bed': Number of times the person exited the bed
+              (only counts gaps >= real_exit_min_minutes).
     """
-    logger.debug(f'Identifying sleep intervals... | max_gap_in_minutes: {max_gap_in_minutes}')
+    logger.debug(
+        f'Identifying sleep intervals... | max_gap_in_minutes={max_gap_in_minutes} '
+        f'real_exit_min_minutes={real_exit_min_minutes}'
+    )
     max_gap = timedelta(minutes=max_gap_in_minutes)
+    real_exit_min = timedelta(minutes=real_exit_min_minutes)
     if not present_intervals:
         return []
 
@@ -130,7 +145,11 @@ def _identify_sleep_intervals(present_intervals: List[Tuple[datetime, datetime]]
             # Merge into the current sleep period
             current_end = next_end
             total_sleep_time += (next_end - next_start)
-            exit_count += 1
+            # Only count this as a real bed exit if the gap is non-trivial.
+            # Tiny gaps are sensor blips (presence detection briefly lost
+            # the user while they were still in bed) — not actual exits.
+            if gap >= real_exit_min:
+                exit_count += 1
         else:
             # Only add sleep interval if it's greater than 3 hours
             if total_sleep_time > timedelta(hours=3):

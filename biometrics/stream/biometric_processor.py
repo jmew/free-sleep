@@ -40,6 +40,69 @@ from data_types import *
 logger = get_logger()
 
 
+class _PresenceCoordinator:
+    """
+    Shared state for cross-side presence arbitration.
+
+    Each piezo sensor picks up some of the OTHER side's signal via mechanical
+    transmission through the mattress. So if you lie on the left, the right
+    sensor also goes well above the empty-bed noise floor — just at a lower
+    amplitude than left. Naively thresholding each side independently produces
+    false positives ("right side is occupied" when only the left is).
+
+    Strategy:
+      1. Each BiometricProcessor reports its current signal_range here.
+      2. We compare both sides and decide who's actually present, using:
+         - A noise-floor threshold (sides below this are definitely empty)
+         - A dominance ratio (one side ≥ DOMINANCE_RATIO × the other → only
+           the dominant side counts as present)
+      3. Each BiometricProcessor reads back its own per-side decision and
+         uses it (with its existing hysteresis) to decide whether to POST.
+
+    Module-level singleton — there's only ever one bed.
+    """
+
+    NOISE_THRESHOLD = 30_000   # below this → side is definitely empty
+    DOMINANCE_RATIO = 1.3      # one side must be ≥ 1.3× the other to be "alone"
+
+    _latest = {'left': 0.0, 'right': 0.0}
+
+    @classmethod
+    def report(cls, side: str, signal_range: float) -> dict:
+        """Update this side's range and return the decision for both sides."""
+        cls._latest[side] = signal_range
+        return cls._decide()
+
+    @classmethod
+    def _decide(cls) -> dict:
+        L = cls._latest['left']
+        R = cls._latest['right']
+
+        left_above = L >= cls.NOISE_THRESHOLD
+        right_above = R >= cls.NOISE_THRESHOLD
+
+        if not left_above and not right_above:
+            return {'left': False, 'right': False}
+        if left_above and not right_above:
+            return {'left': True, 'right': False}
+        if right_above and not left_above:
+            return {'left': False, 'right': True}
+
+        # Both above noise — disambiguate using ratio.
+        if L >= R * cls.DOMINANCE_RATIO:
+            return {'left': True, 'right': False}   # left clearly dominant
+        if R >= L * cls.DOMINANCE_RATIO:
+            return {'left': False, 'right': True}   # right clearly dominant
+
+        # Roughly equal AND both high → both occupied
+        return {'left': True, 'right': True}
+
+    @classmethod
+    def snapshot(cls) -> dict:
+        """For debug logging — current state of both sides."""
+        return {'left_range': cls._latest['left'], 'right_range': cls._latest['right']}
+
+
 class BiometricProcessor:
     heart_rates: Deque[float]   # Store last moving_avg_size heart rates (120)
     breath_rates: Deque[float]  # Store last breath rates
@@ -172,52 +235,56 @@ class BiometricProcessor:
             logger.error(f'Error updating presence API: {e}')
 
     def detect_presence(self, signal: np.ndarray):
-        signal_range = float(np.ptp(signal))
+        # Cast to int64 first — the raw signal is int32 and contains sentinel
+        # values near -2^31 ("no data" markers). np.ptp in int32 wraps around
+        # on those, producing nonsense (often negative) ranges.
+        signal_64 = signal.astype(np.int64, copy=False)
+
+        # Use a percentile-based range (p98 - p2) instead of true max - min.
+        # A single sentinel sample shouldn't dominate the range. Robust to
+        # outliers; p98/p2 still captures real signal envelope.
+        if signal_64.size == 0:
+            signal_range = 0.0
+        else:
+            p2, p98 = np.percentile(signal_64, [2, 98])
+            signal_range = float(p98 - p2)
+
         self._recent_ranges.append(signal_range)
 
-        # Lowered from 200_000 → 50_000 because the previous default was missed
-        # in real-world use. Logs showed the signal sustaining ~30k–80k while
-        # actually in bed, with brief spikes >100k. 50k is a conservative
-        # midpoint; tune via the [presence-debug] log lines this method emits.
-        threshold = 50_000
+        # Cross-side arbitration: report our range to the coordinator and let
+        # it tell us whether THIS side is actually occupied (vs just picking
+        # up mechanical transmission from the other side).
+        decision = _PresenceCoordinator.report(self.side, signal_range)
+        should_be_present = decision[self.side]
 
-        # Periodically log signal_range stats so we can pick a sensible
-        # threshold per pod / per user weight. ~once per 30 calls.
+        # Periodic debug log — includes both sides' ranges and the decision
+        # so we can see why we did (or didn't) flip.
         self._range_log_counter += 1
         if self._range_log_counter >= 30:
             self._range_log_counter = 0
-            recent = list(self._recent_ranges)
-            if recent:
-                avg = sum(recent) / len(recent)
-                logger.info(
-                    f'[presence-debug] {self.side}: now={signal_range:.0f} '
-                    f'avg60={avg:.0f} min={min(recent):.0f} max={max(recent):.0f} '
-                    f'threshold={threshold} present={self.present} '
-                    f'not_present_for={self.not_present_for}'
-                )
+            snap = _PresenceCoordinator.snapshot()
+            logger.info(
+                f'[presence-debug] {self.side}: range={signal_range:.0f} '
+                f'L={snap["left_range"]:.0f} R={snap["right_range"]:.0f} '
+                f'decision_L={decision["left"]} decision_R={decision["right"]} '
+                f'present={self.present} not_present_for={self.not_present_for}'
+            )
 
-        if signal_range > threshold:
+        if should_be_present:
             self.not_present_for = 0
             self.present_for = self.present_for + 1
-
-            # Update presence to True if not already set
             if not self.present:
                 self.present = True
                 self._update_presence_api(True)
-            else:
-                self.present = True
         else:
             self.not_present_for += 1
-            # Hysteresis: tolerance bumped from 10s to 30s above (no_presence_tolerance).
-            # Use >= so we don't have the original "==" bug where the message would
-            # only fire on exactly the boundary tick.
             if self.not_present_for == self.no_presence_tolerance:
-                logger.info(f'User not detected for {self.no_presence_tolerance} seconds on {self.side} side, resetting...')
+                logger.info(
+                    f'User not detected for {self.no_presence_tolerance}s on {self.side} side, resetting...'
+                )
                 self.present = False
                 self.present_for = 0
                 self.reset()
-
-                # Update API that presence is no longer detected
                 self._update_presence_api(False)
 
     def _calculate_vitals(self, signal: np.ndarray, epoch: int, update_breathing=False, update_hrv=False):

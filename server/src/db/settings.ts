@@ -24,12 +24,12 @@ const defaultSideSettings: SideSettings = {
     doubleTap: {
       type: 'temperature',
       change: 'decrement',
-      amount: 1,
+      amount: 2,
     },
     tripleTap: {
       type: 'temperature',
       change: 'increment',
-      amount: 1,
+      amount: 2,
     },
     quadTap: {
       type: 'base_control',
@@ -62,6 +62,16 @@ const settingsDB = new Low<Settings>(file, defaultData);
 await settingsDB.read();
 // Allows us to add default values to the settings if users have existing settingsDB.json data
 settingsDB.data = _.merge({}, defaultData, settingsDB.data);
+
+// Migration: Bump temperature tap amount from old default of 1 to 2.
+for (const sideKey of ['left', 'right'] as const) {
+  for (const gesture of ['doubleTap', 'tripleTap'] as const) {
+    const tap = settingsDB.data[sideKey].taps[gesture];
+    if (tap.type === 'temperature' && tap.amount === 1) {
+      tap.amount = 2;
+    }
+  }
+}
 
 // Migration: Force update quadTap from 'alarm' to 'base_control' if it's the old default
 if (settingsDB.data.left.taps.quadTap.type === 'alarm') {

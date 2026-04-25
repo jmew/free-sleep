@@ -17,6 +17,7 @@ import SleepScoreCard from '@components/SleepScoreCard.tsx';
 import SleepBalanceCard from '@components/SleepBalanceCard.tsx';
 import SideControl from '@components/SideControl.tsx';
 import WeekStrip from './WeekStrip.tsx';
+import WeeklyScheduleBars from './WeeklyScheduleBars.tsx';
 import { SleepRecord } from '../../../../../server/src/db/sleepRecordsSchema.ts';
 import { useAppStore } from '@state/appStore.tsx';
 import { useSleepRecords } from '@api/sleep.ts';
@@ -175,6 +176,11 @@ export default function SleepPage() {
               </>
             )
           }
+          <ErrorBoundary componentName="Weekly schedule bars">
+            <Box sx={ { mt: 2 } }>
+              <WeeklyScheduleBars/>
+            </Box>
+          </ErrorBoundary>
           <ErrorBoundary componentName="Sleep balance">
             <Box sx={ { mt: 2 } }>
               <SleepBalanceCard/>

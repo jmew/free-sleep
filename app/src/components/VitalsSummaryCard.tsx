@@ -1,12 +1,9 @@
 import CircularProgress from '@mui/material/CircularProgress';
 import { useAppStore } from '@state/appStore.tsx';
 import { useVitalsSummary } from '@api/vitals.ts';
-import {
-  Box,
-  Card,
-  Typography,
-} from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { Box, Typography } from '@mui/material';
+import GlassCard from '@design/GlassCard';
+import { palette, typography } from '@design/tokens';
 
 type BiometricsSummaryCardProps = {
   startTime: string;
@@ -17,24 +14,48 @@ type TileProps = {
   title: string;
   value: number;
   unit: string;
-}
+};
 
-const Tile = ({ title, value, unit }: TileProps) => {
-  const theme = useTheme();
+function Tile({ title, value, unit }: TileProps) {
   return (
-    <Box key={ title } textAlign="center" flex={ 1 } minWidth="30%">
-      <Typography variant="body2" color={ theme.palette.grey[400] }>
+    <Box
+      sx={ {
+        flex: 1,
+        minWidth: 0,
+        py: 1,
+      } }
+    >
+      <Typography
+        sx={ {
+          ...typography.sectionLabel,
+          color: palette.text.tertiary,
+          mb: 0.75,
+          fontSize: '0.65rem',
+        } }
+      >
         { title }
       </Typography>
-      <Typography variant="body1" fontWeight="bold" color={ theme.palette.grey[100] }>
-        { value ? value: '--' }{ ' ' }
-        <Typography variant="body2" component="span" color={ theme.palette.grey[400] }>
-          { unit }
+      <Box sx={ { display: 'flex', alignItems: 'baseline', gap: 0.5 } }>
+        <Typography
+          sx={ {
+            fontSize: '1.5rem',
+            fontWeight: 500,
+            color: palette.text.primary,
+            fontVariantNumeric: 'tabular-nums',
+            lineHeight: 1,
+          } }
+        >
+          { value || '—' }
         </Typography>
-      </Typography>
+        { value > 0 && (
+          <Typography sx={ { fontSize: '0.8rem', color: palette.text.tertiary } }>
+            { unit }
+          </Typography>
+        ) }
+      </Box>
     </Box>
   );
-};
+}
 
 // eslint-disable-next-line react/no-multi-comp
 export default function VitalsSummaryCard({ startTime, endTime }: BiometricsSummaryCardProps) {
@@ -42,20 +63,24 @@ export default function VitalsSummaryCard({ startTime, endTime }: BiometricsSumm
   const { data: vitalsSummary, isFetching } = useVitalsSummary({ startTime, endTime, side });
 
   return (
-    <Card sx={ { p: 2, backgroundColor: 'background.paper', position: 'relative', mt: 2 } }>
-      <Typography variant="h6" gutterBottom>
-        Health metrics
-      </Typography>
+    <GlassCard label="HEALTH METRICS">
       { isFetching && <CircularProgress sx={ { display: 'block', mx: 'auto', my: 2 } } /> }
       { !isFetching && vitalsSummary !== undefined && (
-        <Box display="grid" gridTemplateColumns="repeat(3, 1fr)" gap={ 2 }>
-          <Tile value={ vitalsSummary.avgHeartRate } title="Heart rate" unit="bpm" />
-          <Tile value={ vitalsSummary.minHeartRate } title="Min HR" unit="bpm" />
-          <Tile value={ vitalsSummary.maxHeartRate } title="Max HR" unit="bpm" />
-          <Tile value={ vitalsSummary.avgHRV } title="HRV" unit="ms" />
-          <Tile value={ vitalsSummary.avgBreathingRate } title="Breath rate" unit="/min" />
+        <Box
+          sx={ {
+            display: 'grid',
+            gridTemplateColumns: { xs: 'repeat(3, 1fr)', sm: 'repeat(5, 1fr)' },
+            gap: 1.5,
+            mt: 0.5,
+          } }
+        >
+          <Tile title="Avg HR"     value={ vitalsSummary.avgHeartRate } unit="bpm" />
+          <Tile title="Min HR"     value={ vitalsSummary.minHeartRate } unit="bpm" />
+          <Tile title="Max HR"     value={ vitalsSummary.maxHeartRate } unit="bpm" />
+          <Tile title="HRV"        value={ vitalsSummary.avgHRV }       unit="ms" />
+          <Tile title="Breath"     value={ vitalsSummary.avgBreathingRate } unit="brpm" />
         </Box>
       ) }
-    </Card>
+    </GlassCard>
   );
 }

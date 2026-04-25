@@ -44,7 +44,10 @@ const transports: Array<winston.transports.ConsoleTransportInstance | winston.tr
 if (fileTransport) transports.push(fileTransport);
 
 const logger = winston.createLogger({
-  level: 'debug',
+  // 'debug' fills /persistent/free-sleep-data/logs/free-sleep.log fast on a
+  // pod with limited disk. Default to 'info' in production; allow override
+  // via LOG_LEVEL for one-off debugging without redeploying.
+  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
   format: winston.format.combine(
     winston.format.timestamp({
       format: () => moment.utc().format('YYYY-MM-DD HH:mm:ss [UTC]'),

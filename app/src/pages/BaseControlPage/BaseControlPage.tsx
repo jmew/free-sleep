@@ -269,11 +269,15 @@ export default function BaseControlPage() {
       }}
     >
       <Typography
-        variant="h4"
         component="h1"
-        gutterBottom
-        align="center"
-        sx={{ color: '#fff', mb: 4 }}
+        sx={{
+          color: '#fff',
+          mb: 4,
+          fontSize: '2rem',
+          fontWeight: 600,
+          letterSpacing: '-0.02em',
+          alignSelf: 'flex-start',
+        }}
       >
         Elevation
       </Typography>

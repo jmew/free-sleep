@@ -19,6 +19,9 @@
       ],
       "@lib/*": [
         "src/lib/*"
+      ],
+      "@design/*": [
+        "src/design/*"
       ]
     },
     "moduleResolution": "bundler",

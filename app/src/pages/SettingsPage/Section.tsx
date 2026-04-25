@@ -1,7 +1,7 @@
 import { PropsWithChildren } from 'react';
-import { Typography, Card, CardContent } from '@mui/material';
-
-
+import { Typography } from '@mui/material';
+import GlassCard from '@design/GlassCard';
+import { palette } from '@design/tokens';
 
 type SectionProps = PropsWithChildren<{
   title?: string;
@@ -9,20 +9,21 @@ type SectionProps = PropsWithChildren<{
 
 export default function Section({ title, children }: SectionProps) {
   return (
-    <Card sx={ { width: '98%', overflowWrap: 'break-word', wordBreak: 'break-word' } }>
-      <CardContent>
-        {
-          title && (
-            <>
-              <Typography variant='h6' sx={ { textAlign: 'center' } }>
-                { title }
-              </Typography>
-              <br />
-            </>
-          )
-        }
-        { children }
-      </CardContent>
-    </Card>
+    <GlassCard>
+      { title && (
+        <Typography
+          sx={ {
+            fontSize: '1.25rem',
+            fontWeight: 600,
+            color: palette.text.primary,
+            mb: 2,
+            letterSpacing: '-0.01em',
+          } }
+        >
+          { title }
+        </Typography>
+      ) }
+      { children }
+    </GlassCard>
   );
 }

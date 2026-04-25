@@ -1,4 +1,3 @@
-import Grid from '@mui/material/GridLegacy';
 import Switch from '@mui/material/Switch';
 import { Box, TextField, Typography } from '@mui/material';
 import { DeepPartial } from 'ts-essentials';
@@ -6,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { Settings } from '@api/settingsSchema.ts';
 import { Side, useAppStore } from '@state/appStore.tsx';
+import { palette } from '@design/tokens';
 
 type AwayModeSwitchProps = {
   side: Side;
@@ -15,11 +15,9 @@ type AwayModeSwitchProps = {
 
 export default function SideSettings({ side, settings, updateSettings }: AwayModeSwitchProps) {
   const { isUpdating } = useAppStore();
-  const title = side.charAt(0).toUpperCase() + side.slice(1);
+  const sideTitle = side.charAt(0).toUpperCase() + side.slice(1);
 
-  // Local state to manage the text field value
   const [sideName, setSideName] = useState(settings?.[side]?.name || '');
-  // Update local state when settings change (e.g., from API)
   useEffect(() => {
     setSideName(settings?.[side]?.name || side);
   }, [settings, side]);
@@ -32,27 +30,44 @@ export default function SideSettings({ side, settings, updateSettings }: AwayMod
   };
 
   return (
-    <Box sx={ { display: 'flex', flexDirection: 'column', alignItems: 'center' } }>
-      <Typography variant="h6">{ title } Side</Typography>
+    <Box sx={ { display: 'flex', flexDirection: 'column', gap: 1.5 } }>
+      <Typography
+        sx={ {
+          fontSize: '0.7rem',
+          fontWeight: 600,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          color: palette.text.tertiary,
+        } }
+      >
+        { sideTitle } side
+      </Typography>
       <TextField
-        label="Side Name"
+        label="Name"
         placeholder="Enter side name"
         value={ sideName }
         onChange={ (e) => setSideName(e.target.value) }
         onBlur={ handleBlur }
         disabled={ isUpdating }
-        sx={ { mt: 2 } }
+        size="small"
         inputProps={ { maxLength: 20 } }
         fullWidth
       />
-      <Grid container spacing={ 0 }>
-        <Typography alignContent="center">Away mode</Typography>
+      <Box
+        sx={ {
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          py: 0.5,
+        } }
+      >
+        <Typography sx={ { fontSize: '1rem', color: palette.text.primary } }>Away mode</Typography>
         <Switch
           disabled={ isUpdating }
           checked={ settings?.[side]?.awayMode || false }
           onChange={ (event) => updateSettings({ [side]: { awayMode: event.target.checked } }) }
         />
-      </Grid>
+      </Box>
     </Box>
   );
 }

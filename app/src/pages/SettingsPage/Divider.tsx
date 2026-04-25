@@ -1,20 +1,15 @@
-import { useTheme } from '@mui/material/styles';
-import { Divider as MuiDivider } from '@mui/material';
-
+import { Box } from '@mui/material';
+import { palette } from '@design/tokens';
 
 export default function Divider() {
-  const theme = useTheme();
-
   return (
-    <>
-      <br />
-      <MuiDivider
-        sx={ {
-          border: `1px solid ${theme.palette.grey[800]}`,
-          width: '100%'
-        } }
-      />
-      <br />
-    </>
+    <Box
+      sx={ {
+        width: '100%',
+        height: '1px',
+        backgroundColor: palette.border.subtle,
+        my: 1,
+      } }
+    />
   );
 }

@@ -28,8 +28,16 @@ import BaseControlPage from './pages/BaseControlPage/BaseControlPage.tsx';
 const darkTheme = createTheme({
   palette: {
     mode: 'dark',
+    primary: {
+      main: '#0a84ff',  // Apple system blue
+    },
     background: {
-      default: '#010101'
+      default: '#000000',
+      paper: 'rgba(255,255,255,0.04)',
+    },
+    text: {
+      primary: 'rgba(255,255,255,0.95)',
+      secondary: 'rgba(255,255,255,0.65)',
     },
     grey: {
       100: '#e8eaed',
@@ -40,6 +48,30 @@ const darkTheme = createTheme({
       800: '#262626',
       900: '#242424',
     }
+  },
+  typography: {
+    // System font stack — gives us SF Pro on Apple devices, native sans elsewhere.
+    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif',
+  },
+  shape: {
+    borderRadius: 12,
+  },
+  components: {
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',  // disable MUI's default surface tint
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',  // Apple-style — no SHOUTING buttons
+          fontWeight: 500,
+        },
+      },
+    },
   },
 });
 
@@ -67,11 +99,15 @@ const App = () => {
               styles={ {
                 'html, body': {
                   overscrollBehavior: 'none', // Prevent rubber-banding
-                  // Subtle vertical gradient gives the app a moodier, more
-                  // premium feel vs flat #010101.
-                  background: 'linear-gradient(180deg, #16161a 0%, #0a0a0c 50%, #050507 100%)',
+                  // Pure black base with a barely-perceptible warm tint at the top
+                  // — Apple Home / 8 Sleep both use deep black with subtle accent.
+                  background: '#000000',
+                  backgroundImage:
+                    'radial-gradient(ellipse 100% 60% at 50% 0%, rgba(40, 40, 60, 0.35) 0%, transparent 60%)',
                   backgroundAttachment: 'fixed',
                   minHeight: '100vh',
+                  // Tabular numerals for cleaner number alignment.
+                  fontVariantNumeric: 'tabular-nums',
                 },
                 '#Layout': {
                   background: 'transparent',

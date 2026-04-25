@@ -29,13 +29,15 @@ export default function PageContainer({ children, sx, containerProps }: React.Pr
           [theme.breakpoints.up('sm')]: {
             width: '90%',
             padding: 0,
-            paddingTop: 6,
+            paddingTop: 5,
             paddingBottom: 6,
-            maxWidth: '700px',
+            maxWidth: '600px',
           },
           [theme.breakpoints.down('sm')]: {
             width: '100%',
-            padding: 1,
+            paddingLeft: 2,
+            paddingRight: 2,
+            paddingTop: 1,
             paddingBottom: '100px',
           },
           ...sx,

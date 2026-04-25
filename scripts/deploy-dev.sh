@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
-# Build locally, then scp only the build artifacts whose source changed (per git).
-#
-# Detection: `.deploy-state/last-sha` records the git SHA of the last successful deploy.
-# `git diff $LAST_SHA HEAD` + `git status --porcelain` reveal changed source files.
-# Each source file maps to its built artifact, which gets scp'd individually.
+# Build locally, then scp only the build artifacts whose CONTENT changed since
+# the last successful deploy. Detection is content-hash based — no git diff,
+# no source→artifact mapping, no marker SHA. The only state kept locally is
+# .deploy-state/manifest.txt (sha256 of each file shipped last time).
 #
 # Usage:
 #   ./scripts/deploy-dev.sh             # build + scp changed files + restart
-#   ./scripts/deploy-dev.sh --frontend  # only app
-#   ./scripts/deploy-dev.sh --backend   # only server
-#   ./scripts/deploy-dev.sh --full      # ignore git marker; push entire dist/public dirs
+#   ./scripts/deploy-dev.sh --frontend  # only server/public/
+#   ./scripts/deploy-dev.sh --backend   # only server/dist/
+#   ./scripts/deploy-dev.sh --full      # ignore manifest; push every file
 #   ./scripts/deploy-dev.sh --no-build  # skip build (use existing dist/public)
 #   ./scripts/deploy-dev.sh --logs      # tail journalctl on the Pod
 
@@ -26,7 +25,7 @@ POD_PORT="${POD_PORT:-8822}"
 POD_USER="${POD_USER:-root}"
 POD_DIR="/home/dac/free-sleep"
 STATE_DIR=".deploy-state"
-LAST_SHA_FILE="$STATE_DIR/last-sha"
+MANIFEST_FILE="$STATE_DIR/manifest.txt"
 
 # Single SSH connection across all calls below = one password prompt.
 SSH_CTL="/tmp/fs-deploy-%r@%h:%p"
@@ -56,7 +55,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 mkdir -p "$STATE_DIR"
 
-# Wipe macOS Finder junk that gnubby-scp chokes on (.DS_Store and ._* AppleDouble).
+# Wipe macOS Finder junk that gnubby-scp chokes on.
 find server/dist server/public \( -name '.DS_Store' -o -name '._*' \) -delete 2>/dev/null || true
 
 # --------------------------------------------------------------------------------
@@ -71,7 +70,7 @@ case "${1:-}" in
   --no-build) SKIP_BUILD="true" ;;
   --logs)     exec ssh -t "${SSH_OPTS[@]}" "$SSH_TARGET" \
                 "journalctl -u free-sleep -f --no-pager --output=cat" ;;
-  -h|--help)  sed -n '2,15p' "$0"; exit 0 ;;
+  -h|--help)  sed -n '2,12p' "$0"; exit 0 ;;
   "")         ;;
   *)          fail "Unknown argument: $1" ;;
 esac
@@ -94,139 +93,92 @@ else
 fi
 
 # --------------------------------------------------------------------------------
-# 2. Figure out which source files changed since the last successful deploy.
-#    Strategy:
-#      - Committed changes: git diff --name-only $LAST_SHA HEAD
-#      - Uncommitted (working tree + index): git status --porcelain
-#    Combine + dedupe → list of source paths.
-collect_changed_sources() {
-  local prefixes=("$@")  # e.g. "server/src/" "app/src/"
-  local committed="" uncommitted="" all=""
+# 2. Compute hash of every candidate file currently in dist/public.
+#    Roots are filtered by --frontend/--backend.
+SHASUM_BIN="shasum"
+command -v shasum >/dev/null 2>&1 || SHASUM_BIN="sha256sum"
 
-  if [ -s "$LAST_SHA_FILE" ]; then
-    local last_sha
-    last_sha="$(cat "$LAST_SHA_FILE")"
-    committed="$(git diff --name-only "$last_sha" HEAD -- "${prefixes[@]}" 2>/dev/null || true)"
-  fi
+build_roots=()
+[ "$DO_BACKEND"  = "true" ] && build_roots+=("server/dist")
+[ "$DO_FRONTEND" = "true" ] && build_roots+=("server/public")
 
-  # Status format: "XY path" — strip the 2-char status + space, ignore deletes (D).
-  uncommitted="$(git status --porcelain -- "${prefixes[@]}" 2>/dev/null \
-                  | awk '$1 !~ /D/ {print substr($0,4)}' \
-                  | sed 's/^"//;s/"$//')"
-
-  all="$(printf '%s\n%s\n' "$committed" "$uncommitted" | sort -u | sed '/^$/d')"
-  printf '%s\n' "$all"
-}
-
-# Map a source file → its built artifact (relative to repo root).
-# Echoes one or more lines; empty if no mapping.
-map_source_to_artifacts() {
-  local src="$1"
-  case "$src" in
-    server/src/*.ts)
-      local rel="${src#server/src/}"
-      local base="${rel%.ts}"
-      echo "server/dist/${base}.js"
-      # Sourcemaps intentionally skipped — gnubby-scp chokes on the big ones
-      # and they're only used for stack-trace decoding, not runtime.
-      ;;
-    server/src/*.json)
-      # tsc copies JSON if resolveJsonModule + outDir layout includes them; safer to ship.
-      echo "server/dist/${src#server/src/}"
-      ;;
-  esac
-}
-
-# Frontend: Vite bundles ALL of app/src into a fixed handful of output files.
-# So if anything under app/src or app/public or app/index.html changed, push the bundle.
-FRONTEND_BUNDLE_FILES=(
-  "server/public/index.html"
-  "server/public/index.js"
-  "server/public/index.css"
-  "server/public/manifest.json"
-)
+CURRENT_HASHES="$STATE_DIR/current.txt"
+: > "$CURRENT_HASHES"
+for root in "${build_roots[@]}"; do
+  [ -d "$root" ] || continue
+  # shasum / sha256sum output: "<hash>  <path>"
+  find "$root" -type f \
+    \! -name '.DS_Store' \! -name '._*' \! -name '*.map' \
+    -print0 \
+    | xargs -0 "$SHASUM_BIN" -a 256 2>/dev/null \
+    >> "$CURRENT_HASHES"
+done
+# Normalize: shasum prints the path as given; ensure consistent format.
+sort -k 2 -o "$CURRENT_HASHES" "$CURRENT_HASHES"
 
 # --------------------------------------------------------------------------------
-# 3. Build the upload list.
-declare -a UPLOAD_PAIRS=()  # entries: "local_path::remote_path"
+# 3. Compare against the previous manifest. Files to upload =
+#    (current hash differs from manifest) OR (file not in manifest).
+#    --full pretends the manifest is empty so every file gets pushed.
+declare -a UPLOAD_PATHS=()
 
-push_pair() {
-  local local_path="$1"
-  if [ ! -e "$local_path" ]; then return; fi
-  local remote_path="${POD_DIR}/${local_path#}"  # same relative path on Pod
-  UPLOAD_PAIRS+=("${local_path}::${remote_path}")
-}
+use_full_push="$FORCE_FULL"
 
-# --- Backend
-if [ "$DO_BACKEND" = "true" ]; then
-  if [ "$FORCE_FULL" = "true" ] || [ ! -s "$LAST_SHA_FILE" ]; then
-    say "Backend: full push (no marker or --full)."
-    # Walk dist directly; one file per scp. Skip sourcemaps and macOS junk.
-    while IFS= read -r f; do push_pair "$f"; done \
-      < <(find server/dist -type f \! -name '.DS_Store' \! -name '._*' \! -name '*.map' 2>/dev/null)
+if [ "$use_full_push" = "false" ] && [ ! -s "$MANIFEST_FILE" ]; then
+  # No local manifest. Rather than push everything blindly (which would re-send
+  # ~225 files on a first run), ask the Pod for its current file hashes and use
+  # that as our baseline. One round-trip; subsequent runs are normal.
+  say "No local manifest — bootstrapping from the Pod's current files..."
+  if pod "cd '$POD_DIR' && find server/dist server/public -type f \! -name '.DS_Store' \! -name '._*' \! -name '*.map' -print0 2>/dev/null | xargs -0 sha256sum 2>/dev/null" \
+       > "$MANIFEST_FILE" 2>/dev/null && [ -s "$MANIFEST_FILE" ]; then
+    sort -k 2 -o "$MANIFEST_FILE" "$MANIFEST_FILE"
+    ok "Bootstrapped manifest: $(wc -l < "$MANIFEST_FILE" | tr -d ' ') file hashes from Pod."
   else
-    backend_sources=()
-    while IFS= read -r line; do
-      [ -n "$line" ] && backend_sources+=("$line")
-    done < <(collect_changed_sources server/src/)
-    if [ "${#backend_sources[@]}" -eq 0 ]; then
-      ok "Backend: no source changes since last deploy."
-    else
-      say "Backend changed source files (${#backend_sources[@]}):"
-      for s in "${backend_sources[@]}"; do
-        dim "  $s"
-        while IFS= read -r artifact; do
-          [ -n "$artifact" ] && push_pair "$artifact"
-        done < <(map_source_to_artifacts "$s")
-      done
-    fi
+    warn "Bootstrap failed (Pod unreachable or empty install); falling back to full push."
+    rm -f "$MANIFEST_FILE"
+    use_full_push="true"
   fi
 fi
 
-# --- Frontend
-if [ "$DO_FRONTEND" = "true" ]; then
-  if [ "$FORCE_FULL" = "true" ] || [ ! -s "$LAST_SHA_FILE" ]; then
-    say "Frontend: full push (no marker or --full)."
-    while IFS= read -r f; do push_pair "$f"; done \
-      < <(find server/public -type f \! -name '.DS_Store' \! -name '._*' \! -name '*.map' 2>/dev/null)
-  else
-    frontend_sources=()
-    while IFS= read -r line; do
-      [ -n "$line" ] && frontend_sources+=("$line")
-    done < <(collect_changed_sources app/src/ app/public/ app/index.html)
-    if [ "${#frontend_sources[@]}" -eq 0 ]; then
-      ok "Frontend: no source changes since last deploy."
-    else
-      say "Frontend changed source files (${#frontend_sources[@]}) — pushing bundle:"
-      for s in "${frontend_sources[@]}"; do dim "  $s"; done
-      for f in "${FRONTEND_BUNDLE_FILES[@]}"; do push_pair "$f"; done
-      # Also push any new/changed files under app/public (icons, assets) that Vite copies into server/public/.
-      while IFS= read -r src; do
-        case "$src" in
-          app/public/*)
-            local_dest="server/public/${src#app/public/}"
-            push_pair "$local_dest"
-            ;;
-        esac
-      done < <(printf '%s\n' "${frontend_sources[@]}")
+if [ "$use_full_push" = "true" ]; then
+  say "Pushing every file."
+  while IFS= read -r line; do
+    path="${line#*  }"
+    UPLOAD_PATHS+=("$path")
+  done < "$CURRENT_HASHES"
+elif [ -s "$MANIFEST_FILE" ]; then
+  # Build an associative-style lookup using a simple grep into manifest.
+  # For each current entry, find the matching path in the manifest and compare.
+  while IFS= read -r line; do
+    cur_hash="${line%% *}"
+    # Two spaces between hash and path in shasum output.
+    path="${line#*  }"
+    # Look up previous hash for this exact path. Anchor with a tab/space prefix
+    # to avoid partial-match collisions.
+    prev_line="$(grep -F "  $path" "$MANIFEST_FILE" 2>/dev/null | head -n 1 || true)"
+    if [ -z "$prev_line" ]; then
+      UPLOAD_PATHS+=("$path")
+      continue
     fi
-  fi
+    prev_hash="${prev_line%% *}"
+    if [ "$cur_hash" != "$prev_hash" ]; then
+      UPLOAD_PATHS+=("$path")
+    fi
+  done < "$CURRENT_HASHES"
 fi
 
-if [ "${#UPLOAD_PAIRS[@]}" -eq 0 ]; then
-  warn "Nothing to push. Use --full to force a complete redeploy."
+if [ "${#UPLOAD_PATHS[@]}" -eq 0 ]; then
+  ok "All files match the last successful deploy. Nothing to push."
   exit 0
 fi
 
-# --------------------------------------------------------------------------------
-# 4. Pre-create remote directories, then scp each file individually.
-say "Files to upload: ${#UPLOAD_PAIRS[@]}"
+say "Files to upload: ${#UPLOAD_PATHS[@]}"
 
-# Collect unique remote dirs and mkdir -p them in one ssh call.
+# --------------------------------------------------------------------------------
+# 4. Pre-create remote directories.
 remote_dirs_raw=""
-for entry in "${UPLOAD_PAIRS[@]}"; do
-  remote="${entry##*::}"
-  remote_dirs_raw+="$(dirname "$remote")"$'\n'
+for path in "${UPLOAD_PATHS[@]}"; do
+  remote_dirs_raw+="$(dirname "${POD_DIR}/${path}")"$'\n'
 done
 mkdir_cmd=""
 while IFS= read -r d; do
@@ -234,54 +186,51 @@ while IFS= read -r d; do
 done < <(printf '%s' "$remote_dirs_raw" | sort -u)
 pod "$mkdir_cmd" || fail "Failed to create remote directories."
 
-# Upload each file. gnubby-scp has random per-file failures (and sometimes consistently
-# rejects certain files for opaque reasons). Strategy: try scp up to 3x with backoff,
-# then fall back to `cat | ssh "cat > target"` which bypasses scp's protocol entirely.
+# --------------------------------------------------------------------------------
+# 5. Upload each file. gnubby-scp has random per-file failures (and sometimes
+# consistently rejects certain files). Strategy: try scp up to 3x with backoff,
+# then fall back to `cat | ssh "cat > target"`, then base64-over-ssh.
 MAX_SCP_ATTEMPTS=3
 fail_count=0
-for entry in "${UPLOAD_PAIRS[@]}"; do
-  local_p="${entry%%::*}"
-  remote_p="${entry##*::}"
+for path in "${UPLOAD_PATHS[@]}"; do
+  remote_p="${POD_DIR}/${path}"
   attempt=1
   uploaded="false"
   while [ "$attempt" -le "$MAX_SCP_ATTEMPTS" ]; do
-    if scp "${SCP_OPTS[@]}" -q "$local_p" "${SSH_TARGET}:${remote_p}" 2>/dev/null; then
+    if scp "${SCP_OPTS[@]}" -q "$path" "${SSH_TARGET}:${remote_p}" 2>/dev/null; then
       if [ "$attempt" -eq 1 ]; then
-        dim "  ✓ $local_p"
+        dim "  ✓ $path"
       else
-        dim "  ✓ $local_p (scp attempt $attempt)"
+        dim "  ✓ $path (scp attempt $attempt)"
       fi
       uploaded="true"
       break
     fi
     if [ "$attempt" -lt "$MAX_SCP_ATTEMPTS" ]; then
-      warn "  scp retry $attempt/$((MAX_SCP_ATTEMPTS - 1)): $local_p"
+      warn "  scp retry $attempt/$((MAX_SCP_ATTEMPTS - 1)): $path"
       sleep "$attempt"
     fi
     attempt=$((attempt + 1))
   done
 
-  # Fallback 1: pipe over SSH directly (avoids gnubby-scp's content sniffing).
   if [ "$uploaded" = "false" ]; then
-    warn "  scp gave up; trying SSH cat fallback for $local_p"
-    if ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "cat > '$remote_p'" < "$local_p"; then
-      dim "  ✓ $local_p (ssh cat fallback)"
-      uploaded="true"
-    fi
-  fi
-
-  # Fallback 2: base64-encode locally, decode on remote. Makes the content opaque
-  # on the wire in case the wrapper is sniffing payload bytes.
-  if [ "$uploaded" = "false" ]; then
-    warn "  ssh cat failed too; trying base64 fallback for $local_p"
-    if base64 < "$local_p" | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "base64 -d > '$remote_p'"; then
-      dim "  ✓ $local_p (base64 fallback)"
+    warn "  scp gave up; trying SSH cat fallback for $path"
+    if ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "cat > '$remote_p'" < "$path"; then
+      dim "  ✓ $path (ssh cat fallback)"
       uploaded="true"
     fi
   fi
 
   if [ "$uploaded" = "false" ]; then
-    warn "  ✗ $local_p — all upload methods failed"
+    warn "  ssh cat failed too; trying base64 fallback for $path"
+    if base64 < "$path" | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "base64 -d > '$remote_p'"; then
+      dim "  ✓ $path (base64 fallback)"
+      uploaded="true"
+    fi
+  fi
+
+  if [ "$uploaded" = "false" ]; then
+    warn "  ✗ $path — all upload methods failed"
     fail_count=$((fail_count + 1))
   fi
 done
@@ -293,7 +242,7 @@ fi
 pod "chown -R dac:dac '${POD_DIR}/server/dist' '${POD_DIR}/server/public'" || true
 
 # --------------------------------------------------------------------------------
-# 5. Restart service
+# 6. Restart service
 say "Restarting free-sleep..."
 pod "systemctl restart free-sleep"
 sleep 2
@@ -304,6 +253,23 @@ else
 fi
 
 # --------------------------------------------------------------------------------
-# 6. Update marker (only on success). HEAD SHA represents what's now on the Pod.
-git rev-parse HEAD > "$LAST_SHA_FILE"
-ok "Deploy complete. Marker → $(cat "$LAST_SHA_FILE" | cut -c1-8)"
+# 7. Update manifest (only on success). Merge: keep entries for files we did NOT
+#    consider this run (e.g., in --frontend mode the backend entries stay
+#    untouched). Then overlay this run's CURRENT_HASHES on top.
+if [ -f "$MANIFEST_FILE" ]; then
+  # Pull entries for the OTHER side that we didn't touch this run.
+  if [ "$DO_FRONTEND" = "true" ] && [ "$DO_BACKEND" = "false" ]; then
+    grep -v '  server/public/' "$MANIFEST_FILE" > "$STATE_DIR/keep.txt" || true
+  elif [ "$DO_BACKEND" = "true" ] && [ "$DO_FRONTEND" = "false" ]; then
+    grep -v '  server/dist/' "$MANIFEST_FILE" > "$STATE_DIR/keep.txt" || true
+  else
+    : > "$STATE_DIR/keep.txt"
+  fi
+  cat "$STATE_DIR/keep.txt" "$CURRENT_HASHES" | sort -u -k 2 > "$MANIFEST_FILE"
+  rm -f "$STATE_DIR/keep.txt"
+else
+  cp "$CURRENT_HASHES" "$MANIFEST_FILE"
+fi
+rm -f "$CURRENT_HASHES"
+
+ok "Deploy complete. Manifest updated ($(wc -l < "$MANIFEST_FILE" | tr -d ' ') file hashes tracked)."

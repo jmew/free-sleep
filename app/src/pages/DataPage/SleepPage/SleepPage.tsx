@@ -1,19 +1,16 @@
 import { useEffect, useState } from 'react';
 import moment from 'moment-timezone';
-import BedIcon from '@mui/icons-material/Bed';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import { Alert } from '@mui/material';
-import { Box, Typography } from '@mui/material';
+import { Alert, Box, Typography } from '@mui/material';
 import { useResizeDetector } from 'react-resize-detector';
 
-import Header from '../Header';
 import VitalsLineChart from '@components/VitalsLineChart.tsx';
 import PageContainer from '../../PageContainer.tsx';
-import SleepBarChart from '@components/SleepBarChart.tsx';
 import SleepRecordCard from '@components/SleepRecordCard.tsx';
 import VitalsSummaryCard from '@components/VitalsSummaryCard.tsx';
 import SleepScoreCard from '@components/SleepScoreCard.tsx';
+import SleepStagesCard from '@components/SleepStagesCard.tsx';
 import SleepBalanceCard from '@components/SleepBalanceCard.tsx';
 import SideControl from '@components/SideControl.tsx';
 import WeekStrip from './WeekStrip.tsx';
@@ -23,9 +20,8 @@ import { useAppStore } from '@state/appStore.tsx';
 import { useSleepRecords } from '@api/sleep.ts';
 import { useTheme } from '@mui/material/styles';
 import { useVitalsRecords } from '@api/vitals.ts';
-import { useMovementRecords } from '@api/movement.ts';
-import MovementChart from '@components/MovementChart.tsx';
 import ErrorBoundary from '@components/ErrorBoundary.tsx';
+import { palette } from '@design/tokens';
 
 
 const NoData = () => {
@@ -39,7 +35,7 @@ const NoData = () => {
 
 // eslint-disable-next-line react/no-multi-comp
 export default function SleepPage() {
-  const { width = 300, ref } = useResizeDetector();
+  const { ref } = useResizeDetector();
   const { side } = useAppStore();
   const [startTime, setStartTime] = useState(moment().subtract(7, 'days'));
   const [endTime, setEndTime] = useState(moment().add(2, 'day'));
@@ -59,15 +55,6 @@ export default function SleepPage() {
   },
   selectedSleepRecord !== undefined
   );
-
-  const { data: movementRecords } = useMovementRecords({
-    side,
-    startTime: selectedSleepRecord?.entered_bed_at,
-    endTime: selectedSleepRecord?.left_bed_at
-  },
-  selectedSleepRecord !== undefined
-  );
-
 
   useEffect(() => {
     // Default to last record selected
@@ -96,8 +83,22 @@ export default function SleepPage() {
 
   return (
     <ErrorBoundary componentName="Sleep page">
-      <PageContainer containerProps={ { ref } } sx={ { mb: 15, gap: 2.5, mt: 0 } }>
-        <Header title="Sleep" icon={ <BedIcon/> }/>
+      <PageContainer containerProps={ { ref } } sx={ { mb: 15, gap: 2.5, mt: 0, alignItems: 'stretch' } }>
+        { /* Page-level title in the same Apple-style as Settings/Status. No back arrow —
+             Sleep is a top-level tab now. */ }
+        <Typography
+          sx={ {
+            fontSize: '2rem',
+            fontWeight: 600,
+            letterSpacing: '-0.02em',
+            color: palette.text.primary,
+            px: 0.5,
+            mt: 1,
+          } }
+        >
+          Sleep
+        </Typography>
+
         <SideControl/>
         <ErrorBoundary componentName="Week strip">
           <WeekStrip
@@ -107,7 +108,6 @@ export default function SleepPage() {
               if (record) {
                 setSelectedSleepRecord(record);
               }
-              // Snap the visible week-window if user picked a day in another week
               const weekStart = day.clone().startOf('isoWeek').subtract(1, 'day');
               const weekEnd = day.clone().endOf('isoWeek').add(2, 'day');
               setStartTime(weekStart);
@@ -124,6 +124,7 @@ export default function SleepPage() {
             color: theme.palette.grey[500],
             fontSize: '0.85rem',
             mt: 0.5,
+            mx: 'auto',
           } }>
           <NavigateBeforeIcon onClick={ handlePrevWeek } sx={ { cursor: 'pointer', fontSize: 18 } }/>
           <Typography sx={ { fontSize: '0.85rem' } }>
@@ -138,14 +139,16 @@ export default function SleepPage() {
         {
           sleepRecords?.length === 0 && <NoData/>
         }
-        <SleepBarChart
-          width={ width }
-          height={ 300 }
-          sleepRecords={ sleepRecords }
-          selectedSleepRecord={ selectedSleepRecord }
-          setSelectedSleepRecord={ setSelectedSleepRecord }
-        />
-        <Box sx={ { width, display: 'flex', flexDirection: 'column', gap: 2.5 } }>
+        { /* Sleep stages chart replaces the old SleepBarChart at the top. */ }
+        { selectedSleepRecord && (
+          <ErrorBoundary componentName="Sleep stages">
+            <SleepStagesCard
+              startTime={ selectedSleepRecord.entered_bed_at }
+              endTime={ selectedSleepRecord.left_bed_at }
+            />
+          </ErrorBoundary>
+        ) }
+        <Box sx={ { width: '100%', display: 'flex', flexDirection: 'column', gap: 2.5 } }>
           {
             selectedSleepRecord &&
             (
@@ -163,9 +166,6 @@ export default function SleepPage() {
                 />
                 <ErrorBoundary componentName="Heart rate chart">
                   <VitalsLineChart vitalsRecords={ vitalsRecords } metric="heart_rate"/>
-                </ErrorBoundary>
-                <ErrorBoundary componentName="Movement chart">
-                  <MovementChart movementRecords={ movementRecords || [] } label="Movement"/>
                 </ErrorBoundary>
                 <ErrorBoundary componentName="Breathing rate chart">
                   <VitalsLineChart vitalsRecords={ vitalsRecords } metric="breathing_rate"/>

@@ -197,7 +197,7 @@ const createSchedules = (): Schedules => ({
 const createSettings = (): Settings => ({
   id: 'demo-user',
   timeZone: 'America/Los_Angeles',
-  temperatureFormat: 'fahrenheit',
+  temperatureFormat: 'level',
   rebootDaily: true,
   left: {
     name: 'Left side',

@@ -40,7 +40,7 @@ export default function TemperatureFormatSelector({
       >
         { TEMPERATURES.map((format) => (
           <ToggleButton value={ format } key={ format }>
-            { format }
+            { format === 'level' ? '−10 / +10' : '°F' }
           </ToggleButton>
         )) }
       </ToggleButtonGroup>

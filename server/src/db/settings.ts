@@ -63,6 +63,13 @@ await settingsDB.read();
 // Allows us to add default values to the settings if users have existing settingsDB.json data
 settingsDB.data = _.merge({}, defaultData, settingsDB.data);
 
+// Migration: 'celsius' display format was replaced by 'level' (-10..+10 scale
+// matching the official Pod app). Force any existing 'celsius' value to 'level'.
+// @ts-ignore - 'celsius' is no longer in the union but old saved data may have it
+if (settingsDB.data.temperatureFormat === 'celsius') {
+  settingsDB.data.temperatureFormat = 'level';
+}
+
 // Migration: Bump temperature tap amount from old default of 1 to 2.
 for (const sideKey of ['left', 'right'] as const) {
   for (const gesture of ['doubleTap', 'tripleTap'] as const) {

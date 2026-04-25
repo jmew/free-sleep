@@ -48,7 +48,7 @@ export default function SideControl({ showTemp }: SideControlProps) {
   const { data: deviceStatus } = useDeviceStatus();
   const { data: presence } = usePresence();
 
-  const isCelsius = settings?.temperatureFormat === 'celsius';
+  const isLevel = settings?.temperatureFormat === 'level';
   return (
     <ToggleButtonGroup
       color="primary"
@@ -66,7 +66,7 @@ export default function SideControl({ showTemp }: SideControlProps) {
 
           deviceStatus?.left?.isOn ?
 
-            formatTemperature(deviceStatus?.left?.targetTemperatureF, isCelsius)
+            formatTemperature(deviceStatus?.left?.targetTemperatureF, isLevel)
             : 'Off'
         ) }
         <PresenceDot side={ presence?.left }/>
@@ -76,7 +76,7 @@ export default function SideControl({ showTemp }: SideControlProps) {
         { showTemp && side === 'left' && (
 
           deviceStatus?.right?.isOn ?
-            formatTemperature(deviceStatus?.right?.targetTemperatureF, isCelsius) : 'Off'
+            formatTemperature(deviceStatus?.right?.targetTemperatureF, isLevel) : 'Off'
 
         ) }
         <PresenceDot side={ presence?.right }/>

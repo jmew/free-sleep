@@ -9,11 +9,11 @@ import { useScheduleStore } from './scheduleStore.tsx';
 import { DailySchedule, Time } from '../../../../server/src/db/schedulesSchema.ts';
 import { useSettings } from '@api/settings.ts';
 import {
-  farenheitToCelcius,
+  fahrenheitToLevel,
   formatTemperature,
-  MAX_TEMP_C,
+  MAX_TEMP_LEVEL,
   MAX_TEMP_F,
-  MIN_TEMP_C,
+  MIN_TEMP_LEVEL,
   MIN_TEMP_F
 } from '@lib/temperatureConversions.ts';
 
@@ -21,7 +21,7 @@ import {
 type Point = { x: Date; y: number };
 
 const THRESHOLD_F = 82;
-const THRESHOLD_C = farenheitToCelcius(THRESHOLD_F);
+const THRESHOLD_LEVEL = fahrenheitToLevel(THRESHOLD_F);
 const AREA_ALPHA = 0.35;
 const LINE_ALPHA = 1.0;
 
@@ -41,7 +41,7 @@ const compareTime = (a: Time, b: Time) => {
   return ah - bh || am - bm;
 };
 
-function buildSeriesData(selectedSchedule: DailySchedule, yMin: number, yMax: number, isCelsius: boolean): Point[] {
+function buildSeriesData(selectedSchedule: DailySchedule, yMin: number, yMax: number, isLevel: boolean): Point[] {
   if (!selectedSchedule?.power.enabled) return [];
 
   const { power, temperatures } = selectedSchedule;
@@ -66,11 +66,11 @@ function buildSeriesData(selectedSchedule: DailySchedule, yMin: number, yMax: nu
 
   const points: Point[] = [{
     x: start,
-    y: isCelsius ? farenheitToCelcius(power.onTemperature) : power.onTemperature
+    y: isLevel ? fahrenheitToLevel(power.onTemperature) : power.onTemperature
   }];
   const pushStep = (arr: [Date, number][]) => {
     for (const [dt, temp] of arr) {
-      const convertedTemp = isCelsius ? farenheitToCelcius(temp) : temp;
+      const convertedTemp = isLevel ? fahrenheitToLevel(temp) : temp;
 
       if (dt.getTime() > points[points.length - 1].x.getTime()) {
         points.push({ x: dt, y: convertedTemp });
@@ -192,15 +192,15 @@ export default function TemperatureScheduleChart() {
   const { data: settings } = useSettings();
   const theme = useTheme();
 
-  const isCelsius = settings?.temperatureFormat === 'celsius';
-  const yMin = isCelsius ? MIN_TEMP_C : MIN_TEMP_F;
-  const yMax = isCelsius ? MAX_TEMP_C : MAX_TEMP_F;
+  const isLevel = settings?.temperatureFormat === 'level';
+  const yMin = isLevel ? MIN_TEMP_LEVEL : MIN_TEMP_F;
+  const yMax = isLevel ? MAX_TEMP_LEVEL : MAX_TEMP_F;
 
   const points = useMemo(() => {
     if (!selectedSchedule) return [];
-    return buildSeriesData(selectedSchedule, yMin, yMax, isCelsius);
+    return buildSeriesData(selectedSchedule, yMin, yMax, isLevel);
   },
-  [selectedSchedule, yMin, yMax, isCelsius],
+  [selectedSchedule, yMin, yMax, isLevel],
   );
 
   if (!points.length) return null;
@@ -229,11 +229,11 @@ export default function TemperatureScheduleChart() {
           min: yMin,
           max: yMax,
           tickLabelStyle: { fill: axisColor },
-          valueFormatter: (value: number) => formatTemperature(value, isCelsius) ,
+          valueFormatter: (value: number) => formatTemperature(value, isLevel) ,
         }] }
         series={ [{
           id: 'targeTempF',
-          label: isCelsius ? 'Target °C' : 'Target °F',
+          label: isLevel ? 'Target level' : 'Target °F',
           data: yData,
           area: true,
           showMark: false,
@@ -271,7 +271,7 @@ export default function TemperatureScheduleChart() {
           idArea={ gradAreaId }
           idLine={ gradLineId }
           points={ points }
-          threshold={ isCelsius ? THRESHOLD_C : THRESHOLD_F }
+          threshold={ isLevel ? THRESHOLD_LEVEL : THRESHOLD_F }
           colorCool="#2196f3"
           colorHot="#d32f2f"
           areaAlpha={ AREA_ALPHA }

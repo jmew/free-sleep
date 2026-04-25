@@ -51,7 +51,10 @@ export default function SchedulePage() {
     selectDay
   } = useScheduleStore();
   const { data: settings } = useSettings();
-  const displayCelsius = settings?.temperatureFormat === 'celsius';
+  // 'displayCelsius' is now repurposed: true = use the -10..+10 'level' format.
+  // Old prop name kept to avoid touching all the child components — the boolean
+  // value still drives the same conditional in formatTemperature.
+  const displayCelsius = settings?.temperatureFormat === 'level';
   // TODO: Add changes lost notification using changesPresent when user tries to switch tab before saving
 
   useEffect(() => {

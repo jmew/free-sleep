@@ -13,6 +13,7 @@ import PageContainer from '../../PageContainer.tsx';
 import SleepBarChart from '@components/SleepBarChart.tsx';
 import SleepRecordCard from '@components/SleepRecordCard.tsx';
 import VitalsSummaryCard from '@components/VitalsSummaryCard.tsx';
+import SleepScoreCard from '@components/SleepScoreCard.tsx';
 import { SleepRecord } from '../../../../../server/src/db/sleepRecordsSchema.ts';
 import { useAppStore } from '@state/appStore.tsx';
 import { useSleepRecords } from '@api/sleep.ts';
@@ -132,6 +133,12 @@ export default function SleepPage() {
             (
               <>
                 <SleepRecordCard sleepRecord={ selectedSleepRecord } refetch={ refetch }/>
+                <ErrorBoundary componentName="Sleep score">
+                  <SleepScoreCard
+                    startTime={ selectedSleepRecord.entered_bed_at }
+                    endTime={ selectedSleepRecord.left_bed_at }
+                  />
+                </ErrorBoundary>
                 <VitalsSummaryCard
                   startTime={ selectedSleepRecord.entered_bed_at }
                   endTime={ selectedSleepRecord.left_bed_at }

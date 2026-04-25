@@ -5,6 +5,7 @@ import ThermostatIcon from '@mui/icons-material/Thermostat';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import SettingsIcon from '@mui/icons-material/Settings';
 import BugReportIcon from '@mui/icons-material/BugReport';
+import HomeIcon from '@mui/icons-material/Home';
 
 type Page = {
   title: string;
@@ -22,6 +23,7 @@ function TemperatureIcon() {
 }
 
 export const PAGES: Page[] = [
+  { title: 'Home', route: '/', icon: <HomeIcon/> },
   { title: 'Temperature', route: '/temperature', icon: <TemperatureIcon/> },
   { title: 'Schedules', route: '/schedules', icon: <ScheduleIcon/> },
   { title: 'Elevation', route: '/elevation', icon: <BedIcon/> },

@@ -10,6 +10,7 @@ import { StrictMode } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 
 import ControlTempPage from './pages/ControlTempPage/ControlTempPage';
+import HomePage from './pages/HomePage/HomePage';
 import SettingsPage from './pages/SettingsPage/SettingsPage';
 import Layout from './components/Layout';
 import { AppStoreProvider } from '@state/appStore.tsx';
@@ -81,7 +82,7 @@ const App = () => {
             <BrowserRouter basename="/">
               <SentryRoutes>
                 <Route path="/" element={ <Layout/> }>
-                  <Route index element={ <ControlTempPage/> }/>
+                  <Route index element={ <HomePage/> }/>
                   <Route path="temperature" element={ <ControlTempPage/> }/>
                   <Route path="left" element={ <ControlTempPage/> }/>
                   <Route path="right" element={ <ControlTempPage/> }/>

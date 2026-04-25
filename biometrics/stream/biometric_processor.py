@@ -62,7 +62,11 @@ class _PresenceCoordinator:
     Module-level singleton — there's only ever one bed.
     """
 
-    NOISE_THRESHOLD = 30_000   # below this → side is definitely empty
+    # Bumped 30k → 100k after observing real numbers: empty bed maxes at ~10k,
+    # occupied jumps to 200k–16M (even on the OFF side via mattress transmission).
+    # 100k cleanly excludes plausible static loads like a laundry pile or
+    # blanket movement, which the user reports happening frequently.
+    NOISE_THRESHOLD = 100_000
     DOMINANCE_RATIO = 1.3      # one side must be ≥ 1.3× the other to be "alone"
 
     _latest = {'left': 0.0, 'right': 0.0}
@@ -273,17 +277,22 @@ class BiometricProcessor:
         if should_be_present:
             self.not_present_for = 0
             self.present_for = self.present_for + 1
-            if not self.present:
+            # Require ≥3 consecutive elevated readings before flipping present.
+            # Filters brief transients like clothes tossed on the bed, blankets
+            # shifted, etc — those produce 1–2 elevated readings then settle,
+            # never reaching 3 in a row. A person lying down sustains the
+            # signal indefinitely so this trips quickly.
+            if not self.present and self.present_for >= 3:
                 self.present = True
                 self._update_presence_api(True)
         else:
+            self.present_for = 0
             self.not_present_for += 1
             if self.not_present_for == self.no_presence_tolerance:
                 logger.info(
                     f'User not detected for {self.no_presence_tolerance}s on {self.side} side, resetting...'
                 )
                 self.present = False
-                self.present_for = 0
                 self.reset()
                 self._update_presence_api(False)
 

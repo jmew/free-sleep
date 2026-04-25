@@ -87,26 +87,44 @@ export default function TemperatureLabel({
             } }
           >
             <Typography
-              sx={ { textWrap: 'nowrap', textAlign: 'center' } }
+              sx={ {
+                textWrap: 'nowrap',
+                textAlign: 'center',
+                fontSize: '0.75rem',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                fontWeight: 500,
+              } }
               color={ theme.palette.grey[400] }
             >
               { topTitle }
             </Typography>
 
-            { /* Temperature */ }
+            { /* Hero temperature number — large, thin weight for premium feel */ }
             <Typography
-              sx={ { textWrap: 'nowrap', mb: .5 } }
-              variant="h2"
+              sx={ {
+                textWrap: 'nowrap',
+                fontSize: '5.5rem',
+                fontWeight: 200,
+                lineHeight: 1,
+                letterSpacing: '-0.02em',
+                mt: 0.5,
+                mb: 1,
+              } }
               color={ sliderColor }
             >
               { formatTemperature(currentTargetTemp !== sliderTemp ? sliderTemp : currentTargetTemp, displayCelsius) }
             </Typography>
             { /* Currently at label */ }
             <Typography
-              sx={ { textWrap: 'nowrap', mb: 1 } }
+              sx={ {
+                textWrap: 'nowrap',
+                mb: 1,
+                fontSize: '0.875rem',
+              } }
               color={ theme.palette.grey[400] }
             >
-              { `Currently at ${formatTemperature(currentTemperatureF, displayCelsius)}` }
+              { `Currently ${formatTemperature(currentTemperatureF, displayCelsius)}` }
             </Typography>
             {
               power?.enabled && (

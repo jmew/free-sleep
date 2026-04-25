@@ -6,9 +6,11 @@ import AlarmDismissal from './AlarmDismissal.tsx';
 import AlarmNotification from './AlarmNotification.tsx';
 import AwayNotification from './AwayNotification.tsx';
 import ErrorBoundary from '@components/ErrorBoundary.tsx';
+import LastNightChip from './LastNightChip.tsx';
 import PageContainer from '../PageContainer.tsx';
 import PowerButton from './PowerButton.tsx';
 import PrimingNotification from './PrimingNotification.tsx';
+import ScheduleOverrideBanner from './ScheduleOverrideBanner.tsx';
 import SideControl from '../../components/SideControl.tsx';
 import Slider from './Slider.tsx';
 import WaterNotification from './WaterNotification.tsx';
@@ -67,7 +69,10 @@ export default function ControlTempPage() {
         <PowerButton isOn={ sideStatus?.isOn || false } refetch={ refetch }/>
       ) }
 
-      <Box sx={ { display: 'flex', flexDirection: 'column', gap: 1 } }>
+      <Box sx={ { display: 'flex', flexDirection: 'column', gap: 1, width: '100%' } }>
+        <ErrorBoundary componentName='Schedule override banner'>
+          <ScheduleOverrideBanner/>
+        </ErrorBoundary>
         {
           deviceStatus?.isPriming && (
             <PrimingNotification/>
@@ -78,6 +83,9 @@ export default function ControlTempPage() {
         </ErrorBoundary>
         <AwayNotification settings={ settings }/>
         <WaterNotification/>
+        <ErrorBoundary componentName='Last night chip'>
+          <LastNightChip/>
+        </ErrorBoundary>
       </Box>
       <AlarmDismissal refetch={ refetch }/>
       { isUpdating && <CircularProgress/> }

@@ -67,6 +67,14 @@ const App = () => {
               styles={ {
                 'html, body': {
                   overscrollBehavior: 'none', // Prevent rubber-banding
+                  // Subtle vertical gradient gives the app a moodier, more
+                  // premium feel vs flat #010101.
+                  background: 'linear-gradient(180deg, #16161a 0%, #0a0a0c 50%, #050507 100%)',
+                  backgroundAttachment: 'fixed',
+                  minHeight: '100vh',
+                },
+                '#Layout': {
+                  background: 'transparent',
                 },
               } }
             />

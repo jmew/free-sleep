@@ -22,3 +22,6 @@ app/dist/
 /server/free-sleep-data/*
 
 !.gitkeep
+
+# deploy-dev.sh state (last-deploy markers, staged tarballs)
+.deploy-state/

@@ -104,6 +104,45 @@ Vitals are inserted once every 60 seconds & you can access the raw data @ <POD_I
 - [front-end](app/README_APP.md)
 - [back-end](server/README_SERVER.md)
 
+### Deploying changes to a Pod (`scripts/deploy-dev.sh`)
+
+For iterating on this fork against a real Pod over SSH. Builds locally, then scp's only the build artifacts whose source actually changed.
+
+**Setup (one-time):**
+- The Pod's address is hardcoded as `root@192.168.4.181:8822`. Override per-shell with env vars: `POD_HOST=…  POD_PORT=… POD_USER=… ./scripts/deploy-dev.sh`.
+- SSH key auth must work from your shell (the script uses `IdentitiesOnly=yes`). If you get a password prompt, set up `~/.ssh/config` for the Pod.
+
+**Usage:**
+
+```bash
+./scripts/deploy-dev.sh             # build (both) + scp changed files + restart
+./scripts/deploy-dev.sh --frontend  # only the React app
+./scripts/deploy-dev.sh --backend   # only the Express server
+./scripts/deploy-dev.sh --full      # ignore the change marker; push every file in dist/public
+./scripts/deploy-dev.sh --no-build  # skip build (use the dist/public you already have)
+./scripts/deploy-dev.sh --logs      # tail journalctl -u free-sleep on the Pod
+```
+
+**How it figures out what to send:**
+
+1. Builds locally first (`vite build` → `server/public/`, `tsc` → `server/dist/`). If a build fails, the Pod is never touched.
+2. Looks at `.deploy-state/last-sha` (the git SHA of the last successful deploy) and runs `git diff $LAST_SHA HEAD` + `git status --porcelain` to find changed source files.
+3. Maps source → built artifact:
+   - `server/src/X.ts` → `server/dist/X.js`
+   - Any change under `app/src/`, `app/public/`, or `app/index.html` → re-pushes the Vite bundle (`index.{html,js,css}`, `manifest.json`)
+4. scp's each file individually, retrying once on failure.
+5. `systemctl restart free-sleep` and confirms it's `active`.
+6. Updates the marker only if everything succeeded — so a failed deploy will re-attempt the same files next run.
+
+**Gotchas:**
+- **Sourcemaps (`*.js.map`) are intentionally skipped** — Google `gnubby-scp` chokes on the larger ones (`server/public/index.js.map` is 8MB+) and they're only used for stack-trace decoding, not runtime.
+- **First run pushes everything** (no marker yet) — ~225 files. After that, deploys are tiny.
+- **File deletions aren't propagated.** If you delete a `server/src/foo.ts`, the corresponding `server/dist/foo.js` stays on the Pod. Run `--full` (or SSH and clean up) when this matters.
+- **Backend changes require a service restart**; frontend changes technically just need a browser reload, but the script restarts on both for consistency.
+- **Marker is per-checkout** (`.deploy-state/` is gitignored). Switching machines or worktrees → the next deploy will be a full push.
+
+**Releasing to other users:** this script is for *your* iteration loop. To publish a release that everyone else's `fs-update` will pull, commit `server/dist/` and `server/public/` and push to the GitHub branch that `scripts/install.sh` and `scripts/update.sh` reference.
+
 
 ---
 

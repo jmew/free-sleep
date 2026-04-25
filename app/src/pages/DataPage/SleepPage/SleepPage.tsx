@@ -14,7 +14,9 @@ import SleepBarChart from '@components/SleepBarChart.tsx';
 import SleepRecordCard from '@components/SleepRecordCard.tsx';
 import VitalsSummaryCard from '@components/VitalsSummaryCard.tsx';
 import SleepScoreCard from '@components/SleepScoreCard.tsx';
+import SleepBalanceCard from '@components/SleepBalanceCard.tsx';
 import SideControl from '@components/SideControl.tsx';
+import WeekStrip from './WeekStrip.tsx';
 import { SleepRecord } from '../../../../../server/src/db/sleepRecordsSchema.ts';
 import { useAppStore } from '@state/appStore.tsx';
 import { useSleepRecords } from '@api/sleep.ts';
@@ -93,29 +95,42 @@ export default function SleepPage() {
 
   return (
     <ErrorBoundary componentName="Sleep page">
-      <PageContainer containerProps={ { ref } } sx={ { mb: 15, gap: 1, mt: 0 } }>
+      <PageContainer containerProps={ { ref } } sx={ { mb: 15, gap: 1.5, mt: 0 } }>
         <Header title="Sleep" icon={ <BedIcon/> }/>
         <SideControl/>
+        <ErrorBoundary componentName="Week strip">
+          <WeekStrip
+            selectedDate={ endTime.clone().subtract(2, 'day') }
+            selectedRecord={ selectedSleepRecord }
+            onSelectDay={ (day, record) => {
+              if (record) {
+                setSelectedSleepRecord(record);
+              }
+              // Snap the visible week-window if user picked a day in another week
+              const weekStart = day.clone().startOf('isoWeek').subtract(1, 'day');
+              const weekEnd = day.clone().endOf('isoWeek').add(2, 'day');
+              setStartTime(weekStart);
+              setEndTime(weekEnd);
+            } }
+          />
+        </ErrorBoundary>
         <Box
           sx={ {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            width: '80%',
-            color: theme.palette.grey[500]
+            width: '70%',
+            color: theme.palette.grey[500],
+            fontSize: '0.85rem',
+            mt: 0.5,
           } }>
-          { /* Previous Button */ }
-          <NavigateBeforeIcon onClick={ handlePrevWeek } sx={ { cursor: 'pointer' } }/>
-
-          { /* Title - Always Centered */ }
-          <Typography>
-            { startTime.format('YYYY-MM-DD') } - { endTime.format('YYYY-MM-DD') }
+          <NavigateBeforeIcon onClick={ handlePrevWeek } sx={ { cursor: 'pointer', fontSize: 18 } }/>
+          <Typography sx={ { fontSize: '0.85rem' } }>
+            { startTime.format('MMM D') } – { endTime.clone().subtract(2, 'day').format('MMM D') }
           </Typography>
-
-          { /* Next Button (Hidden but Maintains Space) */ }
-          <Box sx={ { width: 24, display: 'flex', justifyContent: 'center' } }>
+          <Box sx={ { width: 18, display: 'flex', justifyContent: 'center' } }>
             { !isNextDisabled && (
-              <NavigateNextIcon onClick={ handleNextWeek } sx={ { cursor: 'pointer' } }/>
+              <NavigateNextIcon onClick={ handleNextWeek } sx={ { cursor: 'pointer', fontSize: 18 } }/>
             ) }
           </Box>
         </Box>
@@ -160,6 +175,11 @@ export default function SleepPage() {
               </>
             )
           }
+          <ErrorBoundary componentName="Sleep balance">
+            <Box sx={ { mt: 2 } }>
+              <SleepBalanceCard/>
+            </Box>
+          </ErrorBoundary>
         </Box>
       </PageContainer>
     </ErrorBoundary>

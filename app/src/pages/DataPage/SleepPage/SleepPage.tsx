@@ -96,7 +96,7 @@ export default function SleepPage() {
 
   return (
     <ErrorBoundary componentName="Sleep page">
-      <PageContainer containerProps={ { ref } } sx={ { mb: 15, gap: 1.5, mt: 0 } }>
+      <PageContainer containerProps={ { ref } } sx={ { mb: 15, gap: 2.5, mt: 0 } }>
         <Header title="Sleep" icon={ <BedIcon/> }/>
         <SideControl/>
         <ErrorBoundary componentName="Week strip">
@@ -145,7 +145,7 @@ export default function SleepPage() {
           selectedSleepRecord={ selectedSleepRecord }
           setSelectedSleepRecord={ setSelectedSleepRecord }
         />
-        <Box sx={ { 'width': width } }>
+        <Box sx={ { width, display: 'flex', flexDirection: 'column', gap: 2.5 } }>
           {
             selectedSleepRecord &&
             (
@@ -177,14 +177,10 @@ export default function SleepPage() {
             )
           }
           <ErrorBoundary componentName="Weekly schedule bars">
-            <Box sx={ { mt: 2 } }>
-              <WeeklyScheduleBars/>
-            </Box>
+            <WeeklyScheduleBars/>
           </ErrorBoundary>
           <ErrorBoundary componentName="Sleep balance">
-            <Box sx={ { mt: 2 } }>
-              <SleepBalanceCard/>
-            </Box>
+            <SleepBalanceCard/>
           </ErrorBoundary>
         </Box>
       </PageContainer>

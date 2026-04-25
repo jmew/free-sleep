@@ -110,9 +110,29 @@ const App = () => {
                   minHeight: '100vh',
                   // Tabular numerals for cleaner number alignment.
                   fontVariantNumeric: 'tabular-nums',
+                  // Kill horizontal overflow at the root so a single child sneaking
+                  // a few pixels past 100% can't trigger the iPhone's "1mm horizontal
+                  // scroll" bug. (overflow-x:hidden also hides any horiz scrollbar.)
+                  overflowX: 'hidden',
+                  maxWidth: '100vw',
+                },
+                // Hide vertical scrollbars but keep scroll functionality, on every
+                // scrollable element across the app. (More minimal/sleek look like
+                // a native iOS app — momentum scroll still works.)
+                '*': {
+                  scrollbarWidth: 'none', // Firefox
+                  msOverflowStyle: 'none', // IE / old Edge
+                },
+                '*::-webkit-scrollbar': {
+                  display: 'none',         // Chrome / Safari / WebKit
+                  width: 0,
+                  height: 0,
                 },
                 '#Layout': {
                   background: 'transparent',
+                  width: '100%',
+                  maxWidth: '100vw',
+                  overflowX: 'hidden',
                 },
               } }
             />

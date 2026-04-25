@@ -70,7 +70,6 @@ function ComponentRow({ label, c }: { label: string; c: SleepScoreComponent }) {
 export default function SleepScoreCard({ startTime, endTime }: SleepScoreCardProps) {
   const { side } = useAppStore();
   const { data: sleepScore, isFetching } = useSleepScore({ side, startTime, endTime });
-  const theme = useTheme();
 
   return (
     <Card sx={ { p: 2, backgroundColor: 'background.paper', position: 'relative', mt: 2 } }>
@@ -91,14 +90,9 @@ export default function SleepScoreCard({ startTime, endTime }: SleepScoreCardPro
             >
               { sleepScore.score }
             </Typography>
-            <Box>
-              <Typography variant="body2" color={ theme.palette.grey[400] }>
-                / 100
-              </Typography>
-              <Typography variant="body1" color={ scoreColor(sleepScore.score) }>
-                { scoreLabel(sleepScore.score) }
-              </Typography>
-            </Box>
+            <Typography variant="body1" color={ scoreColor(sleepScore.score) }>
+              { scoreLabel(sleepScore.score) }
+            </Typography>
           </Box>
           <Box>
             { Object.entries(sleepScore.components).map(([key, c]) => (

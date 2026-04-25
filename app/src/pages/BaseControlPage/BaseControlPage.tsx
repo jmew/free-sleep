@@ -173,15 +173,15 @@ export default function BaseControlPage() {
   const presetButtonStyle = {
     color: '#fff',
     justifyContent: 'space-between',
-    py: 2,
-    px: 4,
+    py: 1,
+    px: 2.5,
     textTransform: 'none',
-    fontSize: '18px',
+    fontSize: '15px',
     fontWeight: 'normal',
     width: '100%',
     minWidth: '320px',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: '24px',
+    borderRadius: '20px',
     border: 'none',
     '&:hover': {
       backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -283,18 +283,19 @@ export default function BaseControlPage() {
       </Typography>
 
       {/* Bed Visualization */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center' }}>
+      <Box sx={{ mb: 2, mt: -1, display: 'flex', justifyContent: 'center' }}>
         <BedVisualization
           headPosition={position.head}
           feetPosition={position.feet}
         />
       </Box>
 
-      {/* Head and Feet Controls */}
+      {/* Head and Feet Controls — column on narrow screens (auto-centered),
+          row on sm+ where they fit side by side. */}
       <Stack
-        direction="row"
-        spacing={{ xs: 2, sm: 6 }}
-        sx={{ mb: 4, justifyContent: 'center', flexWrap: 'wrap' }}
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={{ xs: 3, sm: 6 }}
+        sx={{ mb: 4, alignItems: 'center', justifyContent: 'center' }}
       >
         {/* Head Control */}
         <Box sx={{ textAlign: 'center' }}>
@@ -408,7 +409,7 @@ export default function BaseControlPage() {
       )}
 
       {/* Preset Buttons */}
-      <Stack spacing={2} sx={{ mb: 4 }}>
+      <Stack spacing={1} sx={{ mb: 2 }}>
         {Object.entries(presetTimes).map(([preset, time]) => {
           const IconComponent = presetIcons[preset as keyof typeof presetIcons];
           const isActive = activePreset === preset;

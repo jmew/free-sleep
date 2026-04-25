@@ -106,9 +106,20 @@ router.get(
       side,
       timestamp: { gte: startUnix, lte: endUnix },
     };
-    const vitals = await prisma.vitals.findMany({
+    const vitalsRaw = await prisma.vitals.findMany({
       where: vitalsQuery,
       orderBy: { timestamp: 'asc' },
+    });
+
+    // Dedupe by timestamp — defensive against historical data inserted before
+    // the (side, timestamp) unique constraint was enforced. Without this, a
+    // duplicate row would inflate stage totals (one night reporting 40+ hours
+    // is the symptom).
+    const seenTs = new Set<number>();
+    const vitals = vitalsRaw.filter((v) => {
+      if (seenTs.has(v.timestamp)) return false;
+      seenTs.add(v.timestamp);
+      return true;
     });
 
     const movements = await prisma.movement.findMany({
@@ -116,7 +127,7 @@ router.get(
       orderBy: { timestamp: 'asc' },
     });
 
-    const epochs = classifyStages(
+    const rawEpochs = classifyStages(
       vitals.map((v) => ({
         timestamp: v.timestamp,
         heart_rate: v.heart_rate,
@@ -124,6 +135,18 @@ router.get(
       })),
       movements.map((m) => ({ timestamp: m.timestamp, total_movement: m.total_movement })),
     );
+
+    // Clamp each epoch to the requested period AND drop epochs that fall
+    // entirely outside it. Belt-and-suspenders — the SQL query already filters
+    // by timestamp range, but the classifier extends each epoch by 300s so the
+    // last one could overrun endUnix.
+    const epochs = rawEpochs
+      .map((e) => ({
+        ...e,
+        startUnix: Math.max(e.startUnix, startUnix),
+        endUnix: Math.min(e.endUnix, endUnix),
+      }))
+      .filter((e) => e.endUnix > e.startUnix);
 
     // Roll up totals per stage
     const totals: Record<SleepStage, number> = { awake: 0, rem: 0, light: 0, deep: 0 };

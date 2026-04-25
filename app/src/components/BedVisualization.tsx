@@ -84,11 +84,13 @@ export default function BedVisualization({
       sx={{
         position: 'relative',
         width: '100%',
-        height: '250px',
+        // Tightened: bed image was wrapped in a 250px box leaving large empty
+        // space above and below.
+        height: '160px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        mb: 3,
+        mb: 0,
         backgroundColor: 'transparent',
         borderRadius: 2,
         overflow: 'hidden',
@@ -99,7 +101,7 @@ export default function BedVisualization({
         sx={{
           position: 'relative',
           width: '400px',
-          height: '250px',
+          height: '160px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

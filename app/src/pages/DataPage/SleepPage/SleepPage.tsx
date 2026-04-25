@@ -14,6 +14,7 @@ import SleepBarChart from '@components/SleepBarChart.tsx';
 import SleepRecordCard from '@components/SleepRecordCard.tsx';
 import VitalsSummaryCard from '@components/VitalsSummaryCard.tsx';
 import SleepScoreCard from '@components/SleepScoreCard.tsx';
+import SideControl from '@components/SideControl.tsx';
 import { SleepRecord } from '../../../../../server/src/db/sleepRecordsSchema.ts';
 import { useAppStore } from '@state/appStore.tsx';
 import { useSleepRecords } from '@api/sleep.ts';
@@ -94,6 +95,7 @@ export default function SleepPage() {
     <ErrorBoundary componentName="Sleep page">
       <PageContainer containerProps={ { ref } } sx={ { mb: 15, gap: 1, mt: 0 } }>
         <Header title="Sleep" icon={ <BedIcon/> }/>
+        <SideControl/>
         <Box
           sx={ {
             display: 'flex',

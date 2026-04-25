@@ -17,7 +17,6 @@ import SchedulePage from './pages/SchedulePage/SchedulePage.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
 import { GlobalStyles } from '@mui/material';
 import SleepPage from './pages/DataPage/SleepPage/SleepPage.tsx';
-import DataPage from './pages/DataPage/DataPage.tsx';
 import VitalsPage from './pages/DataPage/VitalsPage/VitalsPage.tsx';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
@@ -124,11 +123,15 @@ const App = () => {
                   <Route path="elevation" element={ <BaseControlPage/> }/>
                   <Route path="status" element={ <StatusPage /> } />
 
-                  <Route path="data" element={ <DataPage /> }>
-                    <Route path="sleep" element={ <SleepPage/> }/>
-                    <Route path="logs" element={ <LogsPage/> }/>
-                    <Route path="vitals" element={ <VitalsPage/> }/>
-                  </Route>
+                  { /* Sleep tab: directly renders SleepPage. The DataPage menu wrapper
+                       is gone; "Logs" is now reachable from Settings. /data still
+                       redirects to /sleep for old links. */ }
+                  <Route path="sleep" element={ <SleepPage/> }/>
+                  <Route path="data" element={ <SleepPage/> }/>
+                  <Route path="data/sleep" element={ <SleepPage/> }/>
+                  <Route path="data/logs" element={ <LogsPage/> }/>
+                  <Route path="data/vitals" element={ <VitalsPage/> }/>
+                  <Route path="logs" element={ <LogsPage/> }/>
 
                   <Route path="settings" element={ <SettingsPage/> }/>
                   <Route path="schedules" element={ <SchedulePage/> }/>

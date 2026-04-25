@@ -101,11 +101,17 @@ class BiometricProcessor:
         self.window_size = runtime_params['window_size']
         self.runtime_params = runtime_params
         self.init_tracking()
-        self.no_presence_tolerance = 10
+        # Increased from 10 → 30 so a brief quiet moment doesn't drop presence.
+        # Useful when you're in bed but momentarily still (e.g., between breaths).
+        self.no_presence_tolerance = 30
         self.breathing_rate = 0
         self.hrv = 0
         self.not_present_for = 0
         self.present_for = 0
+        # Rolling log of the last 60 signal_range observations so we can debug
+        # what threshold value would actually work for this user. Cheap.
+        self._recent_ranges: Deque[float] = deque([], maxlen=60)
+        self._range_log_counter = 0
         self.combined_measurements: Deque[Measurement] = deque([], maxlen=100)
         self.debug_measurements: List[Measurement] = []
 
@@ -166,8 +172,31 @@ class BiometricProcessor:
             logger.error(f'Error updating presence API: {e}')
 
     def detect_presence(self, signal: np.ndarray):
-        signal_range = np.ptp(signal)
-        if signal_range > 200_000:
+        signal_range = float(np.ptp(signal))
+        self._recent_ranges.append(signal_range)
+
+        # Lowered from 200_000 → 50_000 because the previous default was missed
+        # in real-world use. Logs showed the signal sustaining ~30k–80k while
+        # actually in bed, with brief spikes >100k. 50k is a conservative
+        # midpoint; tune via the [presence-debug] log lines this method emits.
+        threshold = 50_000
+
+        # Periodically log signal_range stats so we can pick a sensible
+        # threshold per pod / per user weight. ~once per 30 calls.
+        self._range_log_counter += 1
+        if self._range_log_counter >= 30:
+            self._range_log_counter = 0
+            recent = list(self._recent_ranges)
+            if recent:
+                avg = sum(recent) / len(recent)
+                logger.info(
+                    f'[presence-debug] {self.side}: now={signal_range:.0f} '
+                    f'avg60={avg:.0f} min={min(recent):.0f} max={max(recent):.0f} '
+                    f'threshold={threshold} present={self.present} '
+                    f'not_present_for={self.not_present_for}'
+                )
+
+        if signal_range > threshold:
             self.not_present_for = 0
             self.present_for = self.present_for + 1
 
@@ -179,6 +208,9 @@ class BiometricProcessor:
                 self.present = True
         else:
             self.not_present_for += 1
+            # Hysteresis: tolerance bumped from 10s to 30s above (no_presence_tolerance).
+            # Use >= so we don't have the original "==" bug where the message would
+            # only fire on exactly the boundary tick.
             if self.not_present_for == self.no_presence_tolerance:
                 logger.info(f'User not detected for {self.no_presence_tolerance} seconds on {self.side} side, resetting...')
                 self.present = False

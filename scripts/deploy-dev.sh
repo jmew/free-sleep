@@ -8,6 +8,7 @@
 #   ./scripts/deploy-dev.sh             # build + scp changed files + restart
 #   ./scripts/deploy-dev.sh --frontend  # only server/public/
 #   ./scripts/deploy-dev.sh --backend   # only server/dist/
+#   ./scripts/deploy-dev.sh --biometrics  # one-shot: scp biometrics/ + restart free-sleep-stream
 #   ./scripts/deploy-dev.sh --full      # ignore manifest; push every file
 #   ./scripts/deploy-dev.sh --no-build  # skip build (use existing dist/public)
 #   ./scripts/deploy-dev.sh --logs      # tail journalctl on the Pod
@@ -70,7 +71,28 @@ case "${1:-}" in
   --no-build) SKIP_BUILD="true" ;;
   --logs)     exec ssh -t "${SSH_OPTS[@]}" "$SSH_TARGET" \
                 "journalctl -u free-sleep -f --no-pager --output=cat" ;;
-  -h|--help)  sed -n '2,12p' "$0"; exit 0 ;;
+  --biometrics)
+    # One-shot biometrics sync. We don't do this on every deploy because the
+    # Python service rarely changes; usually only when fixing biometrics-specific
+    # bugs (signal thresholds, presence detection, etc.).
+    say "Syncing biometrics/ to Pod..."
+    BIO_TGZ="/tmp/fs-biometrics.tgz"
+    tar --exclude='__pycache__' --exclude='*.pyc' \
+        -czf "$BIO_TGZ" -C "$REPO_ROOT" biometrics
+    scp "${SCP_OPTS[@]}" -q "$BIO_TGZ" "${SSH_TARGET}:/tmp/fs-biometrics.tgz" \
+      || fail "scp of biometrics tarball failed."
+    pod "set -e
+         tar -xzf /tmp/fs-biometrics.tgz -C /home/dac/free-sleep/
+         chown -R dac:dac /home/dac/free-sleep/biometrics
+         rm -f /tmp/fs-biometrics.tgz
+         systemctl restart free-sleep-stream || true
+         systemctl is-active free-sleep-stream" \
+      && ok "Biometrics synced and free-sleep-stream restarted." \
+      || fail "Biometrics sync or restart failed."
+    rm -f "$BIO_TGZ"
+    exit 0
+    ;;
+  -h|--help)  sed -n '2,13p' "$0"; exit 0 ;;
   "")         ;;
   *)          fail "Unknown argument: $1" ;;
 esac

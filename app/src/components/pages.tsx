@@ -1,6 +1,6 @@
 import React from 'react';
-import BarChartIcon from '@mui/icons-material/BarChart';
 import BedIcon from '@mui/icons-material/Bed';
+import HotelIcon from '@mui/icons-material/Hotel';
 import ThermostatIcon from '@mui/icons-material/Thermostat';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -26,7 +26,7 @@ export const PAGES: Page[] = [
   { title: 'Schedules', route: '/schedules', icon: <ScheduleIcon/> },
   { title: 'Elevation', route: '/elevation', icon: <BedIcon/> },
 
-  { title: 'Data', route: '/data', icon: <BarChartIcon/> },
+  { title: 'Sleep', route: '/sleep', icon: <HotelIcon/> },
   { title: 'Status', route: '/status', icon: <BugReportIcon/> },
   { title: 'Settings', route: '/settings', icon: <SettingsIcon/> },
 ];

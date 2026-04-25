@@ -1,9 +1,4 @@
-/* eslint-disable react/no-multi-comp */
 import { useMemo } from 'react';
-import Alert, { AlertProps } from '@mui/material/Alert';
-import Link from '@mui/material/Link';
-import InfoIcon from '@mui/icons-material/Info';
-import WarningIcon from '@mui/icons-material/Warning';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { Card, Typography } from '@mui/material';
 import moment from 'moment-timezone';
@@ -22,47 +17,6 @@ function downsampleData<T>(data: readonly T[], factor: number): T[] {
   if (!Number.isFinite(factor) || factor <= 1) return [...data];
   return data.filter((_, i) => i % factor === 0);
 }
-type BannerProps = {
-  metric: Metric;
-  label: string;
-}
-
-type BannerMapping = {
-  icon: React.ReactElement;
-  severity: AlertProps['severity'];
-  text: string | React.ReactElement;
-}
-type BannerMap = Record<Metric, BannerMapping>;
-
-const Banner = ({ metric }: BannerProps) => {
-  const bannerMap: BannerMap = {
-    heart_rate: {
-      icon: <InfoIcon color='info'/>,
-      severity: 'info',
-      text: <Typography>Heart rate data has been validated with six participants, and accuracy may be limited.
-        You can help improve future accuracy by contributing your own data for validation or
-        by experimenting and improving the algorithm yourself.
-        See the <Link href='https://github.com/throwaway31265/free-sleep?tab=readme-ov-file#biometrics-'>documentation</Link>
-        &nbsp;for details on current measurement accuracy.
-      </Typography>,
-    },
-    breathing_rate: {
-      icon: <WarningIcon color='warning'/>,
-      severity: 'warning',
-      text: 'Breath rate accuracy has not been verified.',
-    },
-    hrv: {
-      icon: <WarningIcon color='warning'/>,
-      severity: 'warning',
-      text: 'HRV accuracy has not been verified.',
-    }
-  };
-  return (
-    <Alert icon={ bannerMap[metric].icon } severity={ bannerMap[metric].severity }>
-      { bannerMap[metric].text }
-    </Alert>
-  );
-};
 
 export default function VitalsLineChart({ vitalsRecords, metric }: VitalsLineChartProps) {
   const { width = 300, ref } = useResizeDetector();
@@ -136,8 +90,6 @@ export default function VitalsLineChart({ vitalsRecords, metric }: VitalsLineCha
           },
         ] }
       />
-      <Banner metric={ metric } label={ vitalsMap[metric].label } />
-
     </Card>
   );
 }

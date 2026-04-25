@@ -2,15 +2,17 @@ import { DeepPartial } from 'ts-essentials';
 import { Typography, Box } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
 
+import { useNavigate } from 'react-router-dom';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import TextSnippetIcon from '@mui/icons-material/TextSnippet';
+
 import SideSettings from './SideSettings.tsx';
 import PageContainer from '../PageContainer.tsx';
 import { Settings } from '@api/settingsSchema.ts';
 import { postSettings, useSettings } from '@api/settings.ts';
 import { useAppStore } from '@state/appStore.tsx';
 import DailyPriming from './DailyPriming.tsx';
-import LicenseModal from './LicenseModal.tsx';
 import PrimeControl from './PrimeControl.tsx';
-import Divider from './Divider.tsx';
 import FeaturesSection from './FeaturesSection/FeaturesSection.tsx';
 import Section from './Section.tsx';
 import DeviceSettingsSection from './DeviceSettingsSection/DeviceSettingsSection.tsx';
@@ -33,6 +35,7 @@ function InlineHelp({ children }: { children: React.ReactNode }) {
 export default function SettingsPage() {
   const { data: settings, refetch } = useSettings();
   const { setIsUpdating } = useAppStore();
+  const navigate = useNavigate();
 
   const updateSettings = (settings: DeepPartial<Settings>) => {
     setIsUpdating(true);
@@ -102,10 +105,32 @@ export default function SettingsPage() {
         </Section>
       </ErrorBoundary>
 
-      <ErrorBoundary componentName='Info section'>
-        <Divider/>
-        <LicenseModal/>
-      </ErrorBoundary>
+      { /* Logs entry — used to live under Data tab; lives here now. */ }
+      <Section>
+        <Box
+          onClick={ () => navigate('/logs') }
+          sx={ {
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+            mx: -2.5,
+            px: 2.5,
+            py: 1.5,
+            my: -1.5,
+            borderRadius: 1,
+            '&:hover': { backgroundColor: palette.bg.hover },
+          } }
+        >
+          <Box sx={ { display: 'flex', alignItems: 'center', gap: 1.5 } }>
+            <TextSnippetIcon sx={ { color: palette.text.secondary } }/>
+            <Typography sx={ { fontSize: '1rem', color: palette.text.primary } }>
+              Logs
+            </Typography>
+          </Box>
+          <ChevronRightIcon sx={ { color: palette.text.tertiary } }/>
+        </Box>
+      </Section>
     </PageContainer>
   );
 }

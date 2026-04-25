@@ -9,7 +9,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppStore } from '@state/appStore.tsx';
 import { useTheme } from '@mui/material/styles';
 import { PAGES } from './pages';
-import freeSleepIcon from '../../public/free-sleep-icon.svg';
+// Files in app/public/ are served at the URL root by Vite — reference by URL,
+// don't import. (Vite errors on direct imports from /public.)
+const freeSleepIcon = '/free-sleep-icon.svg';
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -76,7 +78,7 @@ export default function Navbar() {
       >
         <Toolbar>
           <div style={ { flexGrow: 1 } }>
-            <img src={ freeSleepIcon } alt="Join our Discord" width={ 45 } height={ 45 } />
+            <img src={ freeSleepIcon } alt="App" width={ 45 } height={ 45 } />
           </div>
           <Box sx={ { display: 'flex', gap: 2 } }>
             { PAGES.map(({ title, route }) => (

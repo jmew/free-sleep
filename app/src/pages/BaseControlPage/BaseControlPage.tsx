@@ -156,11 +156,11 @@ export default function BaseControlPage() {
 
   const pillButtonStyle = {
     color: '#fff',
-    fontSize: '24px',
+    fontSize: '18px',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: '50%',
-    width: '48px',
-    height: '48px',
+    width: '36px',
+    height: '36px',
     '&:hover': {
       backgroundColor: 'rgba(255, 255, 255, 0.2)',
     },
@@ -294,18 +294,18 @@ export default function BaseControlPage() {
           row on sm+ where they fit side by side. */}
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
-        spacing={{ xs: 3, sm: 6 }}
-        sx={{ mb: 4, alignItems: 'center', justifyContent: 'center' }}
+        spacing={{ xs: 2, sm: 5 }}
+        sx={{ mb: 2.5, alignItems: 'center', justifyContent: 'center' }}
       >
         {/* Head Control */}
         <Box sx={{ textAlign: 'center' }}>
           <Typography
-            variant="h6"
             sx={{
               color: '#888',
-              mb: 2,
-              fontSize: '14px',
-              fontWeight: 'normal',
+              mb: 1,
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.12em',
             }}
           >
             HEAD
@@ -323,13 +323,14 @@ export default function BaseControlPage() {
               <RemoveIcon />
             </IconButton>
             <Typography
-              variant="h2"
               sx={{
                 color: '#fff',
-                fontWeight: 'bold',
-                minWidth: { xs: 50, sm: 60 },
-                fontSize: { xs: '3rem', sm: '3.75rem' },
+                fontWeight: 500,
+                minWidth: { xs: 36, sm: 44 },
+                fontSize: { xs: '2rem', sm: '2.4rem' },
                 textAlign: 'center',
+                fontVariantNumeric: 'tabular-nums',
+                lineHeight: 1,
               }}
             >
               {position.head}
@@ -347,12 +348,12 @@ export default function BaseControlPage() {
         {/* Feet Control */}
         <Box sx={{ textAlign: 'center' }}>
           <Typography
-            variant="h6"
             sx={{
               color: '#888',
-              mb: 2,
-              fontSize: '14px',
-              fontWeight: 'normal',
+              mb: 1,
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.12em',
             }}
           >
             FEET
@@ -370,13 +371,14 @@ export default function BaseControlPage() {
               <RemoveIcon />
             </IconButton>
             <Typography
-              variant="h2"
               sx={{
                 color: '#fff',
-                fontWeight: 'bold',
-                minWidth: { xs: 50, sm: 60 },
-                fontSize: { xs: '3rem', sm: '3.75rem' },
+                fontWeight: 500,
+                minWidth: { xs: 36, sm: 44 },
+                fontSize: { xs: '2rem', sm: '2.4rem' },
                 textAlign: 'center',
+                fontVariantNumeric: 'tabular-nums',
+                lineHeight: 1,
               }}
             >
               {position.feet}

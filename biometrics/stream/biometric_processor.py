@@ -24,6 +24,8 @@ import traceback
 import numpy as np
 import json
 from collections import deque
+import urllib.request
+import urllib.error
 
 from get_logger import get_logger
 from heart.exceptions import BadSignalWarning
@@ -55,6 +57,8 @@ class BiometricProcessor:
             insertion_frequency=60,
             rolling_average_size=25,
             debug=False,
+            api_host='127.0.0.1',  # Added API configuration
+            api_port=3000,  # Added API configuration
     ):
         self.present = False
         self.side = side
@@ -63,6 +67,11 @@ class BiometricProcessor:
         self.iteration_count = 0
         self.rolling_average_size = rolling_average_size
         self.debug = debug
+
+        # API configuration for presence updates
+        self.api_host = api_host
+        self.api_port = api_port
+        self.presence_api_url = f'http://{api_host}:{api_port}/api/metrics/presence'
 
         self.heart_rate_window_seconds = 3
         self.breath_rate_window_seconds = 30
@@ -114,12 +123,60 @@ class BiometricProcessor:
         self.iteration_count = 0
         self.init_tracking()
 
+    def _update_presence_api(self, is_present: bool):
+        """
+        Send presence update to the API endpoint.
+
+        Args:
+            is_present: Boolean indicating if presence is detected
+        """
+        try:
+            # Build the payload based on which side this processor handles
+            payload = {
+                self.side: {
+                    "present": is_present,
+                }
+            }
+
+            # Convert payload to JSON bytes
+            data = json.dumps(payload).encode('utf-8')
+
+            # Create the request
+            req = urllib.request.Request(
+                self.presence_api_url,
+                data=data,
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+
+            # Make the request with timeout
+            with urllib.request.urlopen(req, timeout=2) as response:
+                if response.status == 200:
+                    logger.debug(f'Successfully updated presence API for {self.side} side: {is_present}')
+                else:
+                    response_body = response.read().decode('utf-8')
+                    logger.warning(f'Presence API returned status {response.status}: {response_body}')
+
+        except urllib.error.URLError as e:
+            if isinstance(e.reason, TimeoutError):
+                logger.warning(f'Presence API request timed out for {self.side} side')
+            else:
+                logger.warning(f'Could not connect to presence API at {self.presence_api_url}: {e.reason}')
+        except Exception as e:
+            logger.error(f'Error updating presence API: {e}')
+
     def detect_presence(self, signal: np.ndarray):
         signal_range = np.ptp(signal)
         if signal_range > 200_000:
             self.not_present_for = 0
             self.present_for = self.present_for + 1
-            self.present = True
+
+            # Update presence to True if not already set
+            if not self.present:
+                self.present = True
+                self._update_presence_api(True)
+            else:
+                self.present = True
         else:
             self.not_present_for += 1
             if self.not_present_for == self.no_presence_tolerance:
@@ -127,6 +184,9 @@ class BiometricProcessor:
                 self.present = False
                 self.present_for = 0
                 self.reset()
+
+                # Update API that presence is no longer detected
+                self._update_presence_api(False)
 
     def _calculate_vitals(self, signal: np.ndarray, epoch: int, update_breathing=False, update_hrv=False):
         try:
@@ -321,6 +381,3 @@ class BiometricProcessor:
 
     def calculate_hrv(self, signal1: np.ndarray, epoch: int):
         self._calculate_vitals(signal1, epoch, update_hrv=True)
-
-
-

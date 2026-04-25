@@ -412,6 +412,30 @@ The POST endpoints (`/api/deviceStatus`, `/api/settings`, `/api/schedules`) supp
 
 ```
 
+--- 
+
+## /api/metrics/presence
+### GET
+
+- Tracks whether someone is present on the left and/or right side.
+Stored in-memory (resets on server restart). 
+Timestamps are server-generated.
+
+#### Response
+
+```json
+{
+  "left": {
+    "present": false,
+    "lastUpdatedAt": "2025-12-18T00:12:34-08:00"
+  },
+  "right": {
+    "present": true,
+    "lastUpdatedAt": "2025-12-18T00:12:34-08:00"
+  }
+}
+```
+
 ---
 
 ## `/api/serverStatus`

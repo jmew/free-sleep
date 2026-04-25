@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "VITE_ENV=dev vite",
+    "build:pr": "export VITE_ENV=pr && tsc -b && vite build",
     "build:demo": "export VITE_ENV=demo VITE_USE_MSW=true && tsc -b && vite build",
     "build": "export VITE_ENV=prod && tsc -b && vite build",
     "lint": "eslint .",

@@ -38,16 +38,13 @@
 ---
 # Installation Steps
 
-## 1. Reset firmware
 
-1. Reset the firmware for your device
-    1. [Pod 3](docs/pod_3_teardown/6_firmware_reset.jpeg)
-    1. [Pod 4](docs/pod_4_teardown/3_reset_firmware.png)
+## 1. Access the circuit board
+1. **Pod 5 users only**: you must first setup your pod with the 8 sleep app, then proceed
 1. Follow the steps to teardown your device and get access to the circuit board
    1. [Pod 3](docs/pod_3_teardown) 
    1. [Pod 4](docs/pod_4_teardown)
        1. [Pod 4 written instructions](docs/pod_4_teardown/instructions.md)
-1. **For troubleshooting or debugging issues:** do step 2, 3 then step 1 while you have the minicom connection setup 
 
 ---
 

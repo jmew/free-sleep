@@ -11,7 +11,7 @@ import { useTheme } from '@mui/material/styles';
 import { PAGES } from './pages';
 // Files in app/public/ are served at the URL root by Vite — reference by URL,
 // don't import. (Vite errors on direct imports from /public.)
-const freeSleepIcon = '/free-sleep-icon.svg';
+const freeSleepIcon = '/free-sleep-icon_192.png';
 
 export default function Navbar() {
   const navigate = useNavigate();

@@ -1,5 +1,5 @@
 import InfoIcon from '@mui/icons-material/Info';
-import { Box, CircularProgress, FormControlLabel, Typography, Switch } from '@mui/material';
+import { Box, CircularProgress, Typography, Switch } from '@mui/material';
 import Section from '../Section.tsx';
 import { Services, useServices, postServices } from '@api/services.ts';
 import { useAppStore } from '@state/appStore.tsx';

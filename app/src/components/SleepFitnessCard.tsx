@@ -54,10 +54,12 @@ function ArcGauge({ score, color }: { score: number; color: string }) {
   const VB_H = 200;
   const cx = VB_W / 2;
   const cy = VB_H - 6;            // bottom-center of the arc
-  const innerR = 96;
-  const outerR = 150;
-  // Score number vertically centered inside the half-disc.
-  const numberY = cy - innerR * 0.45;
+  // Thin band of ticks near the outer edge of the half-disc — leaves a
+  // generous gap between the dial and the score number.
+  const outerR = 152;
+  const innerR = 142;
+  // Visual center of the half-disc, where the score number sits.
+  const numberY = cy - outerR * 0.5;
 
   return (
     <svg viewBox={ `0 0 ${VB_W} ${VB_H}` } style={ { display: 'block', width: '100%' } }>
@@ -82,12 +84,12 @@ function ArcGauge({ score, color }: { score: number; color: string }) {
       <text
         x={ cx } y={ numberY }
         fill={ palette.text.primary }
-        fontSize={ 84 }
+        fontSize={ 64 }
         fontWeight={ 300 }
         textAnchor="middle"
         dominantBaseline="middle"
         fontFamily="inherit"
-        style={ { letterSpacing: '-0.04em' } }
+        style={ { letterSpacing: '-0.03em' } }
       >
         { score }
       </text>

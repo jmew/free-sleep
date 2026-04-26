@@ -107,30 +107,32 @@ function StatBlock({
       >
         { label }
       </Typography>
-      <Box sx={ { display: 'flex', alignItems: 'baseline', gap: 1 } }>
+      <Box sx={ { display: 'flex', alignItems: 'baseline', gap: { xs: 0.75, sm: 1 } } }>
         <Typography
           sx={ {
-            fontSize: '1.6rem',
+            fontSize: { xs: '1.25rem', sm: '1.6rem' },
             fontWeight: 500,
             letterSpacing: '-0.01em',
             color: palette.text.primary,
             fontVariantNumeric: 'tabular-nums',
             lineHeight: 1.05,
+            whiteSpace: 'nowrap',
           } }
         >
           { duration }
         </Typography>
         <Typography
           sx={ {
-            fontSize: '1.1rem',
+            fontSize: { xs: '0.9rem', sm: '1.1rem' },
             color: palette.text.primary,
             opacity: 0.85,
             fontWeight: 400,
             borderLeft: `1px solid ${palette.border.subtle}`,
-            pl: 1,
+            pl: { xs: 0.75, sm: 1 },
             display: 'flex',
             alignItems: 'center',
             gap: 0.5,
+            whiteSpace: 'nowrap',
           } }
         >
           { pct }
@@ -259,7 +261,7 @@ export default function SleepStagesCard({ startTime, endTime }: Props) {
 
       { !isFetching && data && data.epochs.length > 0 && (
         <>
-          <Box sx={ { display: 'flex', gap: 5, mb: 2.5, flexWrap: 'wrap' } }>
+          <Box sx={ { display: 'flex', gap: { xs: 2.5, sm: 5 }, mb: 2.5, flexWrap: 'wrap' } }>
             <StatBlock
               label="Deep sleep"
               duration={ formatHM(data.totals.deep) }

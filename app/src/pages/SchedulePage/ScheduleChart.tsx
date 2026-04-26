@@ -223,13 +223,12 @@ export default function TemperatureScheduleChart() {
           max: xData[xData.length - 1],
           tickMinStep: 60 * 60 * 1000,
           tickNumber: 4,
-          label: isLevel ? 'level' : '°F',
-          tickLabelStyle: { fill: axisColor },
+          tickLabelStyle: { fill: axisColor, fontSize: 11 },
         }] }
         yAxis={ [{
           min: yMin,
           max: yMax,
-          tickLabelStyle: { fill: axisColor },
+          tickLabelStyle: { fill: axisColor, fontSize: 11 },
           valueFormatter: (value: number) => {
             // Data is already converted to the displayed unit by buildSeriesData
             // — DON'T run formatTemperature(value, isLevel) here, that would
@@ -248,11 +247,14 @@ export default function TemperatureScheduleChart() {
           showMark: false,
           curve: 'stepAfter',
         }] }
+        // Reserve enough space on the left for "−10"/"+10" labels and on the
+        // bottom for a full "10:00 AM" tick label. Both were getting clipped
+        // at the prior 50/19 values, especially on iPhone widths.
         margin={ {
-          right: 0,
-          left: 50,
-          top: 5,
-          bottom: 19
+          right: 12,
+          left: 44,
+          top: 8,
+          bottom: 32,
         } }
         sx={ {
           pt: 0,

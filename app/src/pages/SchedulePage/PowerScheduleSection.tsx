@@ -24,7 +24,10 @@ type Props = {
   displayCelsius: boolean;
 };
 
-const TIME_FIELD_WIDTH = 100;
+// Wide enough for a full "09:50 PM" tick label plus the trailing clock icon
+// adornment without truncation on Safari iOS (which renders 12-hour times in
+// the native time input).
+const TIME_FIELD_WIDTH = 130;
 
 export default function PowerScheduleSection({ displayCelsius }: Props) {
   const { isUpdating } = useAppStore();

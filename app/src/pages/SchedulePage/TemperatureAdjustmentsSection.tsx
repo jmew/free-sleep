@@ -150,7 +150,7 @@ export default function TemperatureAdjustmentsSection({ displayCelsius }: Props)
             }
             disabled={ disabled || isUpdating }
             sx={ {
-              width: '110px',
+              width: '130px',
               '& input::-webkit-calendar-picker-indicator': { opacity: 0, display: 'none' },
             } }
             InputProps={ {

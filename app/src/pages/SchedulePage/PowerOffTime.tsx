@@ -54,7 +54,7 @@ export default function PowerOffTime() {
       }
       disabled={ disabled }
       sx={ {
-        width: '110px',
+        width: '130px',
         // Hide native indicator (where it exists)
         '& input::-webkit-calendar-picker-indicator': {
           opacity: 0,

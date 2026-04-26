@@ -290,10 +290,11 @@ export default function BaseControlPage() {
         />
       </Box>
 
-      {/* Head and Feet Controls — column on narrow screens (auto-centered),
-          row on sm+ where they fit side by side. */}
+      {/* Head and Feet Controls — always side-by-side; the inner row of
+          buttons + number is ~120px so two of them fit comfortably even on
+          a 390px iPhone. */}
       <Stack
-        direction={{ xs: 'column', sm: 'row' }}
+        direction="row"
         spacing={{ xs: 2, sm: 5 }}
         sx={{ mb: 2.5, alignItems: 'center', justifyContent: 'center' }}
       >

@@ -127,17 +127,18 @@ export default function SleepConsistencyCard({ weekRecords, weekStart }: Props) 
   // proportional digits so the times read at the same rhythm as the rest of
   // the app instead of feeling crammed together.
   const headerValueSx = {
-    fontSize: '1.75rem',
+    fontSize: { xs: '1.4rem', sm: '1.75rem' },
     fontWeight: 500,
     letterSpacing: '-0.02em',
     color: palette.text.primary,
     lineHeight: 1.1,
+    whiteSpace: 'nowrap',
   } as const;
 
   return (
     <GlassCard>
       { /* Header stats: ASLEEP avg / AWAKE avg — mirrors the 8 Sleep card. */ }
-      <Box sx={ { display: 'flex', gap: 5, mb: 1.5 } }>
+      <Box sx={ { display: 'flex', gap: { xs: 3, sm: 5 }, mb: 1.5 } }>
         <Box>
           <Typography sx={ { ...typography.sectionLabel, color: palette.text.tertiary, mb: 0.25 } }>
             ASLEEP

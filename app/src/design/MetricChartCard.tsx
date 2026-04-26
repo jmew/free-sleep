@@ -44,7 +44,7 @@ export default function MetricChartCard({ title, stats, children }: MetricChartC
           { title }
         </Typography>
       ) }
-      <Box sx={ { display: 'flex', gap: 4, mb: 2.5, flexWrap: 'wrap' } }>
+      <Box sx={ { display: 'flex', gap: { xs: 2.5, sm: 4 }, mb: 2.5, flexWrap: 'wrap' } }>
         { stats.map((s, i) => (
           <Box key={ i } sx={ { minWidth: 0 } }>
             <Typography
@@ -58,12 +58,13 @@ export default function MetricChartCard({ title, stats, children }: MetricChartC
             </Typography>
             <Typography
               sx={ {
-                fontSize: '2rem',
+                fontSize: { xs: '1.5rem', sm: '2rem' },
                 fontWeight: 500,
                 lineHeight: 1.05,
                 letterSpacing: '-0.02em',
                 color: s.color || palette.text.primary,
                 fontVariantNumeric: 'tabular-nums',
+                whiteSpace: 'nowrap',
               } }
             >
               { s.value }

@@ -101,11 +101,12 @@ export default function SleepConsistencyCard({ weekRecords, weekStart }: Props) 
 
   const { days, matchedRecords, times, avgBed, avgWake, yMin, yMax, inRange } = view;
 
-  // SVG layout
+  // SVG layout — kept fairly short on the page; the bars convey rhythm at
+  // a glance and don't need a tall plot area.
   const VB_W = 1000;
-  const VB_H = 360;
-  const PAD_TOP = 20;
-  const PAD_BOTTOM = 36;
+  const VB_H = 240;
+  const PAD_TOP = 14;
+  const PAD_BOTTOM = 32;
   const PAD_RIGHT = 110;
   const PAD_LEFT = 16;
   const plotH = VB_H - PAD_TOP - PAD_BOTTOM;
@@ -122,41 +123,32 @@ export default function SleepConsistencyCard({ weekRecords, weekStart }: Props) 
   const wakeBandTop = yOf(avgWake - TOLERANCE_HOURS);
   const wakeBandBot = yOf(avgWake + TOLERANCE_HOURS);
 
+  // Header text style — mirrors the page title's letter-spacing /
+  // proportional digits so the times read at the same rhythm as the rest of
+  // the app instead of feeling crammed together.
+  const headerValueSx = {
+    fontSize: '1.75rem',
+    fontWeight: 500,
+    letterSpacing: '-0.02em',
+    color: palette.text.primary,
+    lineHeight: 1.1,
+  } as const;
+
   return (
     <GlassCard>
       { /* Header stats: ASLEEP avg / AWAKE avg — mirrors the 8 Sleep card. */ }
-      <Box sx={ { display: 'flex', gap: 5, mb: 2.5 } }>
+      <Box sx={ { display: 'flex', gap: 5, mb: 1.5 } }>
         <Box>
-          <Typography sx={ { ...typography.sectionLabel, color: palette.text.tertiary, mb: 0.5 } }>
+          <Typography sx={ { ...typography.sectionLabel, color: palette.text.tertiary, mb: 0.25 } }>
             ASLEEP
           </Typography>
-          <Typography
-            sx={ {
-              fontSize: '2rem',
-              fontWeight: 500,
-              color: palette.text.primary,
-              fontVariantNumeric: 'tabular-nums',
-              lineHeight: 1.05,
-            } }
-          >
-            { formatShiftedHour(avgBed) }
-          </Typography>
+          <Typography sx={ headerValueSx }>{ formatShiftedHour(avgBed) }</Typography>
         </Box>
         <Box>
-          <Typography sx={ { ...typography.sectionLabel, color: palette.text.tertiary, mb: 0.5 } }>
+          <Typography sx={ { ...typography.sectionLabel, color: palette.text.tertiary, mb: 0.25 } }>
             AWAKE
           </Typography>
-          <Typography
-            sx={ {
-              fontSize: '2rem',
-              fontWeight: 500,
-              color: palette.text.primary,
-              fontVariantNumeric: 'tabular-nums',
-              lineHeight: 1.05,
-            } }
-          >
-            { formatShiftedHour(avgWake) }
-          </Typography>
+          <Typography sx={ headerValueSx }>{ formatShiftedHour(avgWake) }</Typography>
         </Box>
       </Box>
 
@@ -164,7 +156,7 @@ export default function SleepConsistencyCard({ weekRecords, weekStart }: Props) 
         <svg
           viewBox={ `0 0 ${VB_W} ${VB_H}` }
           preserveAspectRatio="none"
-          style={ { display: 'block', width: '100%', height: 280 } }
+          style={ { display: 'block', width: '100%', height: 180 } }
         >
           { /* Translucent green bands at the average bedtime + waketime */ }
           <rect

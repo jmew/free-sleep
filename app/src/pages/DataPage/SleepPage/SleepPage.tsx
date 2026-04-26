@@ -7,11 +7,11 @@ import { useResizeDetector } from 'react-resize-detector';
 
 import VitalsLineChart from '@components/VitalsLineChart.tsx';
 import PageContainer from '../../PageContainer.tsx';
-import SleepRecordCard from '@components/SleepRecordCard.tsx';
 import VitalsSummaryCard from '@components/VitalsSummaryCard.tsx';
-import SleepScoreCard from '@components/SleepScoreCard.tsx';
 import SleepStagesCard from '@components/SleepStagesCard.tsx';
 import SleepBalanceCard from '@components/SleepBalanceCard.tsx';
+import SleepFitnessCard from '@components/SleepFitnessCard.tsx';
+import SleepConsistencyCard from '@components/SleepConsistencyCard.tsx';
 import SideControl from '@components/SideControl.tsx';
 import WeekStrip from './WeekStrip.tsx';
 import WeeklyScheduleBars from './WeeklyScheduleBars.tsx';
@@ -19,7 +19,7 @@ import { SleepRecord } from '../../../../../server/src/db/sleepRecordsSchema.ts'
 import { useAppStore } from '@state/appStore.tsx';
 import { useSleepRecords } from '@api/sleep.ts';
 import { useTheme } from '@mui/material/styles';
-import { useVitalsRecords } from '@api/vitals.ts';
+import { useVitalsRecords, useVitalsSummary } from '@api/vitals.ts';
 import ErrorBoundary from '@components/ErrorBoundary.tsx';
 import { palette } from '@design/tokens';
 
@@ -55,6 +55,17 @@ export default function SleepPage() {
   },
   selectedSleepRecord !== undefined
   );
+
+  // Vitals summary across the 7 days leading up to (and including) the
+  // selected night. Drives the "7 DAY AVERAGE" stat on each VitalsLineChart.
+  const sevenDayWindow = selectedSleepRecord
+    ? {
+        side,
+        startTime: moment(selectedSleepRecord.left_bed_at).subtract(7, 'days').toISOString(),
+        endTime: selectedSleepRecord.left_bed_at,
+      }
+    : undefined;
+  const { data: weekVitalsSummary } = useVitalsSummary(sevenDayWindow);
 
   useEffect(() => {
     // Default to last record selected
@@ -157,11 +168,13 @@ export default function SleepPage() {
             selectedSleepRecord &&
             (
               <>
-                <SleepRecordCard sleepRecord={ selectedSleepRecord } refetch={ refetch }/>
-                <ErrorBoundary componentName="Sleep score">
-                  <SleepScoreCard
-                    startTime={ selectedSleepRecord.entered_bed_at }
-                    endTime={ selectedSleepRecord.left_bed_at }
+                <ErrorBoundary componentName="Sleep fitness card">
+                  <SleepFitnessCard sleepRecord={ selectedSleepRecord } refetch={ refetch } />
+                </ErrorBoundary>
+                <ErrorBoundary componentName="Sleep consistency">
+                  <SleepConsistencyCard
+                    weekRecords={ sleepRecords }
+                    weekStart={ displayedEnd.clone().startOf('isoWeek') }
                   />
                 </ErrorBoundary>
                 <VitalsSummaryCard
@@ -169,13 +182,25 @@ export default function SleepPage() {
                   endTime={ selectedSleepRecord.left_bed_at }
                 />
                 <ErrorBoundary componentName="Heart rate chart">
-                  <VitalsLineChart vitalsRecords={ vitalsRecords } metric="heart_rate"/>
+                  <VitalsLineChart
+                    vitalsRecords={ vitalsRecords }
+                    metric="heart_rate"
+                    sevenDayAvg={ weekVitalsSummary?.avgHeartRate }
+                  />
                 </ErrorBoundary>
                 <ErrorBoundary componentName="Breathing rate chart">
-                  <VitalsLineChart vitalsRecords={ vitalsRecords } metric="breathing_rate"/>
+                  <VitalsLineChart
+                    vitalsRecords={ vitalsRecords }
+                    metric="breathing_rate"
+                    sevenDayAvg={ weekVitalsSummary?.avgBreathingRate }
+                  />
                 </ErrorBoundary>
                 <ErrorBoundary componentName="HRV chart">
-                  <VitalsLineChart vitalsRecords={ vitalsRecords } metric="hrv"/>
+                  <VitalsLineChart
+                    vitalsRecords={ vitalsRecords }
+                    metric="hrv"
+                    sevenDayAvg={ weekVitalsSummary?.avgHRV }
+                  />
                 </ErrorBoundary>
               </>
             )

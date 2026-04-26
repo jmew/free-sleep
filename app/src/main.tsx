@@ -74,6 +74,27 @@ const darkTheme = createTheme({
         },
       },
     },
+    // Default `background.paper` is translucent (rgba(255,255,255,0.04)) so
+    // that GlassCards can sit on the page background. That same translucency
+    // makes Select/Menu popovers hard to read because they show whatever's
+    // behind them. Pin menu surfaces to an opaque dark grey instead.
+    MuiMenu: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: '#1c1c1e',
+          backgroundImage: 'none',
+          border: '1px solid rgba(255,255,255,0.08)',
+        },
+      },
+    },
+    MuiPopover: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: '#1c1c1e',
+          backgroundImage: 'none',
+        },
+      },
+    },
   },
 });
 

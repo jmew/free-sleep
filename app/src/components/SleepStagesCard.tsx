@@ -37,6 +37,26 @@ const STAGE_LABEL: Record<SleepStage, string> = {
 
 const TARGET_HOURS = [6.5, 9];   // "in range" band displayed under Time slept
 const TARGET_GREEN = '#22c55e';
+const TARGET_YELLOW = '#eab308';
+const TARGET_RED = '#ef4444';
+
+// Healthy adult sleep-stage targets, used to color the dot beside REM and
+// Deep percentages. Sources cluster around: deep ~13–23%, REM ~20–25%.
+// We use a single ramp:
+//   green  = inside the healthy band
+//   yellow = within 5pp of either edge of the band (slightly off)
+//   red    = more than 5pp outside the band
+const STAGE_HEALTH: Record<'rem' | 'deep', { lo: number; hi: number }> = {
+  rem:  { lo: 20, hi: 25 },
+  deep: { lo: 13, hi: 23 },
+};
+
+function stageDotColor(stage: 'rem' | 'deep', pct: number): string {
+  const { lo, hi } = STAGE_HEALTH[stage];
+  if (pct >= lo && pct <= hi) return TARGET_GREEN;
+  if (pct >= lo - 5 && pct <= hi + 5) return TARGET_YELLOW;
+  return TARGET_RED;
+}
 
 function formatHM(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -68,12 +88,12 @@ function StatBlock({
   label,
   duration,
   pct,
-  subtext,
+  dotColor,
 }: {
   label: string;
   duration: string;
   pct: string;
-  subtext?: string;
+  dotColor: string;
 }) {
   return (
     <Box sx={ { minWidth: 0 } }>
@@ -114,14 +134,9 @@ function StatBlock({
           } }
         >
           { pct }
-          <Box sx={ { width: 5, height: 5, borderRadius: '50%', backgroundColor: TARGET_GREEN } }/>
+          <Box sx={ { width: 5, height: 5, borderRadius: '50%', backgroundColor: dotColor } }/>
         </Typography>
       </Box>
-      { subtext && (
-        <Typography sx={ { fontSize: '0.85rem', color: palette.text.tertiary, mt: 0.25 } }>
-          { subtext }
-        </Typography>
-      ) }
     </Box>
   );
 }
@@ -249,13 +264,13 @@ export default function SleepStagesCard({ startTime, endTime }: Props) {
               label="Deep sleep"
               duration={ formatHM(data.totals.deep) }
               pct={ `${data.percentages.deep}%` }
-              subtext={ `At ${data.percentages.deep}%` }
+              dotColor={ stageDotColor('deep', data.percentages.deep) }
             />
             <StatBlock
               label="REM"
               duration={ formatHM(data.totals.rem) }
               pct={ `${data.percentages.rem}%` }
-              subtext={ `Over ${data.percentages.rem}%` }
+              dotColor={ stageDotColor('rem', data.percentages.rem) }
             />
           </Box>
 

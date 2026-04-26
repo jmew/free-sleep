@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import { TIME_ZONES } from './timeZones.js';
 import { TimeSchema } from './schedulesSchema.js';
-export const TEMPERATURES = ['celsius', 'fahrenheit'];
+// 'level' is the -10..+10 scale used by the official Pod app
+// (where -10 = coldest, 0 = neutral, +10 = warmest). Maps linearly to F
+// internally; display-only.
+export const TEMPERATURES = ['level', 'fahrenheit'];
 const Temperatures = z.enum(TEMPERATURES);
 const TemperatureTapConfig = z.object({
     type: z.literal('temperature'),

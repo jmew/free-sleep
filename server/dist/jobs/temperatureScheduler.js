@@ -3,6 +3,8 @@ import { getDayIndexForSchedule, logJob } from './utils.js';
 import { updateDeviceStatus } from '../routes/deviceStatus/updateDeviceStatus.js';
 import serverStatus from '../serverStatus.js';
 import logger from '../logger.js';
+import { isTempScheduleOverridden } from './scheduleOverride.js';
+import settingsDB from '../db/settings.js';
 const scheduleAdjustment = (timeZone, side, day, time, temperature) => {
     const onRule = new schedule.RecurrenceRule();
     const dayOfWeekIndex = getDayIndexForSchedule(day, time);
@@ -14,6 +16,12 @@ const scheduleAdjustment = (timeZone, side, day, time, temperature) => {
     onRule.tz = timeZone;
     schedule.scheduleJob(`${side}-${day}-${time}-${temperature}-temperature-adjustment`, onRule, async () => {
         try {
+            await settingsDB.read();
+            if (isTempScheduleOverridden(side)) {
+                const expiresAt = settingsDB.data[side].scheduleOverrides.temperatureSchedules.expiresAt;
+                logJob(`Skipping temperature adjustment — schedule overridden until ${expiresAt}`, side, day, dayOfWeekIndex, time);
+                return;
+            }
             logJob('Executing temperature adjustment job', side, day, dayOfWeekIndex, time);
             await updateDeviceStatus({
                 [side]: {

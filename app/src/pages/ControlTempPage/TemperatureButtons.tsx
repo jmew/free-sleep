@@ -6,7 +6,12 @@ import { useControlTempStore } from './controlTempStore.tsx';
 import { useAppStore } from '@state/appStore.tsx';
 import { postDeviceStatus } from '@api/deviceStatus.ts';
 import { useSettings } from '@api/settings.ts';
-import { MIN_TEMP_F, MAX_TEMP_F } from '@lib/temperatureConversions.ts';
+import {
+  MIN_TEMP_F,
+  MAX_TEMP_F,
+  fahrenheitToLevel,
+  levelToFahrenheit,
+} from '@lib/temperatureConversions.ts';
 
 type TemperatureButtonsProps = {
   refetch: any;
@@ -49,15 +54,20 @@ export default function TemperatureButtons({ refetch, currentTargetTemp }: Tempe
   const borderColor = theme.palette.grey[800];
   const iconColor = theme.palette.grey[500];
 
-  const handleClick = (change: number) => {
+  // When the user is viewing in 'level' mode (-10..+10), one click should change
+  // the displayed level by 1 — which is 2.75°F under the hood (since the scale
+  // spans 55..110°F = 55°F over 20 levels). We snap the new value to the nearest
+  // integer level so successive clicks stay on integer levels.
+  const isLevel = settings?.temperatureFormat === 'level';
+  const handleClick = (direction: 1 | -1) => {
     if (!deviceStatus) return;
-    if (deviceStatus === undefined) return;
+    const currentF = deviceStatus[side].targetTemperatureF;
+    const nextF = isLevel
+      ? levelToFahrenheit(fahrenheitToLevel(currentF) + direction)
+      : currentF + direction;
     setDeviceStatus({
-      [side]: {
-        targetTemperatureF: deviceStatus[side].targetTemperatureF + change,
-      }
+      [side]: { targetTemperatureF: nextF },
     });
-
     scheduleUpdate();
   };
 

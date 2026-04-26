@@ -3,6 +3,7 @@ import { connectFranken } from '../../8sleep/frankenServer.js';
 import { DeviceStatusSchema } from './deviceStatusSchema.js';
 import logger from '../../logger.js';
 import { updateDeviceStatus } from './updateDeviceStatus.js';
+import { markManualTempChange } from '../../jobs/scheduleOverride.js';
 const router = express.Router();
 router.get('/deviceStatus', async (req, res) => {
     const franken = await connectFranken();
@@ -21,6 +22,13 @@ router.post('/deviceStatus', async (req, res) => {
         return;
     }
     await updateDeviceStatus(body);
+    // If the user manually set a target temperature on a side, maybe pause the
+    // remaining schedule (see scheduleOverride.markManualTempChange for rules).
+    for (const side of ['left', 'right']) {
+        if (body?.[side]?.targetTemperatureF !== undefined) {
+            await markManualTempChange(side);
+        }
+    }
     res.status(204).end();
 });
 export default router;

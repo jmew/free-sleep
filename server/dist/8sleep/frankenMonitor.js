@@ -7,6 +7,7 @@ import { wait } from './promises.js';
 import { Version } from '../routes/deviceStatus/deviceStatusSchema.js';
 import { GestureSchema } from '../db/settingsSchema.js';
 import { updateDeviceStatus } from '../routes/deviceStatus/updateDeviceStatus.js';
+import { markManualTempChange } from '../jobs/scheduleOverride.js';
 import serverStatus from '../serverStatus.js';
 import { trimixBase } from './trimixBaseControl.js';
 import { BASE_PRESETS } from './basePresets.js';
@@ -51,7 +52,10 @@ export class FrankenMonitor {
                 newTemperatureTargetF = currentTemperatureTarget + (-1 * change);
             }
             logger.debug(`Processing gesture temperature change for ${side}. ${currentTemperatureTarget} -> ${newTemperatureTargetF}`);
-            return await updateDeviceStatus({ [side]: { targetTemperatureF: newTemperatureTargetF } });
+            await updateDeviceStatus({ [side]: { targetTemperatureF: newTemperatureTargetF } });
+            // Tap counts as a manual change for schedule-override purposes.
+            await markManualTempChange(side);
+            return;
         }
         else if (behavior.type === 'base_control') {
             // Cycle between relax and flat presets

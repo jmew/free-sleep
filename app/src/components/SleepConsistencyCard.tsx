@@ -159,7 +159,7 @@ export default function SleepConsistencyCard({ weekRecords, weekStart }: Props) 
         </Box>
       </Box>
 
-      <Box sx={ { width: '100%' } }>
+      <Box sx={ { width: '100%', touchAction: 'pan-y' } }>
         { /* Chart row: SVG bars/bands on the left, HTML time labels on the
              right (HTML so they don't get stretched by the SVG's
              preserveAspectRatio="none"). */ }
@@ -168,7 +168,7 @@ export default function SleepConsistencyCard({ weekRecords, weekStart }: Props) 
             <svg
               viewBox={ `0 0 ${VB_W} ${VB_H}` }
               preserveAspectRatio="none"
-              style={ { display: 'block', width: '100%', height: '100%' } }
+              style={ { display: 'block', width: '100%', height: '100%', touchAction: 'pan-y' } }
             >
               { /* Translucent green bands at the average bedtime + waketime */ }
               <rect

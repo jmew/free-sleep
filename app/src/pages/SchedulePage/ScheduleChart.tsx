@@ -212,7 +212,7 @@ export default function TemperatureScheduleChart() {
   const axisColor = theme.palette.grey['600'];
 
   return (
-    <GlassCard sx={ { height: 300, p: 2 } }>
+    <GlassCard sx={ { height: 300, p: 2, touchAction: 'pan-y' } }>
       <LineChart
         xAxis={ [{
           scaleType: 'time',

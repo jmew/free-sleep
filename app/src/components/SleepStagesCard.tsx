@@ -172,11 +172,11 @@ function StagesChart({ epochs, periodStart, periodEnd }: {
   const merged = mergeAdjacent(epochs);
 
   return (
-    <Box sx={ { width: '100%', mb: 1 } }>
+    <Box sx={ { width: '100%', mb: 1, touchAction: 'pan-y' } }>
       <svg
         viewBox={ `0 0 ${VB_W} ${VB_H}` }
         preserveAspectRatio="none"
-        style={ { display: 'block', width: '100%', height: 200 } }
+        style={ { display: 'block', width: '100%', height: 200, touchAction: 'pan-y' } }
       >
         { /* Connecting vertical lines between adjacent segments of different stages */ }
         { merged.map((seg, i) => {

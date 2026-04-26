@@ -1,6 +1,7 @@
 import React from 'react';
 import BedIcon from '@mui/icons-material/Bed';
-import HotelIcon from '@mui/icons-material/Hotel';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import AirlineSeatReclineExtraIcon from '@mui/icons-material/AirlineSeatReclineExtra';
 import ThermostatIcon from '@mui/icons-material/Thermostat';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -24,9 +25,12 @@ function TemperatureIcon() {
 export const PAGES: Page[] = [
   { title: 'Temperature', route: '/temperature', icon: <TemperatureIcon/> },
   { title: 'Schedules', route: '/schedules', icon: <ScheduleIcon/> },
-  { title: 'Elevation', route: '/elevation', icon: <BedIcon/> },
+  // Reclining-seat glyph reads as a tilted/raised bed posture better than the
+  // flat BedIcon used previously.
+  { title: 'Elevation', route: '/elevation', icon: <AirlineSeatReclineExtraIcon/> },
 
-  { title: 'Sleep', route: '/sleep', icon: <HotelIcon/> },
+  // Three-bar chart glyph for the Sleep stats tab.
+  { title: 'Sleep', route: '/sleep', icon: <BarChartIcon/> },
   { title: 'Status', route: '/status', icon: <BugReportIcon/> },
   { title: 'Settings', route: '/settings', icon: <SettingsIcon/> },
 ];

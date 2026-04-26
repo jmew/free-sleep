@@ -54,7 +54,7 @@ export default function TimeSeriesChart({
   const padded = [yMin - ySpan * 0.1, yMax + ySpan * 0.1];
 
   return (
-    <Box ref={ ref } sx={ { width: '100%', position: 'relative' } }>
+    <Box ref={ ref } sx={ { width: '100%', position: 'relative', touchAction: 'pan-y' } }>
       { /* Translucent green target band, drawn behind the chart */ }
       { targetRange && (
         <Box

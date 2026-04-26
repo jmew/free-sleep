@@ -72,7 +72,13 @@ export default function MetricChartCard({ title, stats, children }: MetricChartC
           </Box>
         )) }
       </Box>
-      { children }
+      { /* Chart bleeds edge-to-edge across the card: cancel the GlassCard's
+           horizontal padding (p: 2.5 = 20px) so the plot uses the full card
+           width on narrow phones. touch-action: pan-y so a vertical swipe
+           starting on the chart still scrolls the page. */ }
+      <Box sx={ { mx: -2.5, touchAction: 'pan-y' } }>
+        { children }
+      </Box>
     </GlassCard>
   );
 }

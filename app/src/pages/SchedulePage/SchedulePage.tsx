@@ -1,6 +1,8 @@
 import _ from 'lodash';
 import { useEffect } from 'react';
-import { Box } from '@mui/material';
+import { Box, Typography } from '@mui/material';
+
+import { palette } from '@design/tokens';
 import { DeepPartial } from 'ts-essentials';
 import moment from 'moment-timezone';
 
@@ -108,6 +110,19 @@ export default function SchedulePage() {
         mb: 15,
       } }
     >
+      <Typography
+        sx={ {
+          fontSize: '2rem',
+          fontWeight: 600,
+          letterSpacing: '-0.02em',
+          color: palette.text.primary,
+          alignSelf: 'flex-start',
+          px: 0.5,
+          mt: 1,
+        } }
+      >
+        Schedules
+      </Typography>
       <SideControl/>
 
       <DayTabs/>

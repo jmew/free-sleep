@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import Button from '@mui/material/Button';
-import { Box, CircularProgress } from '@mui/material';
+import { Box, CircularProgress, Typography } from '@mui/material';
 
+import { palette } from '@design/tokens';
 import AlarmDismissal from './AlarmDismissal.tsx';
 import AlarmNotification from './AlarmNotification.tsx';
 import AwayNotification from './AwayNotification.tsx';
@@ -49,6 +50,19 @@ export default function ControlTempPage() {
         },
       } }
     >
+      <Typography
+        sx={ {
+          fontSize: '2rem',
+          fontWeight: 600,
+          letterSpacing: '-0.02em',
+          color: palette.text.primary,
+          alignSelf: 'flex-start',
+          px: 0.5,
+          mt: 1,
+        } }
+      >
+        Temperature
+      </Typography>
       <Slider
         isOn={ isOn }
         currentTargetTemp={ sideStatus?.targetTemperatureF || 55 }

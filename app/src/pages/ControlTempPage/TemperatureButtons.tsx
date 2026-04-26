@@ -58,7 +58,9 @@ export default function TemperatureButtons({ refetch, currentTargetTemp }: Tempe
   // the displayed level by 1 — which is 2.75°F under the hood (since the scale
   // spans 55..110°F = 55°F over 20 levels). We snap the new value to the nearest
   // integer level so successive clicks stay on integer levels.
-  const isLevel = settings?.temperatureFormat === 'level';
+  // Always level mode (-10..+10); the F selector was removed.
+  const isLevel = true;
+  void settings;
   const handleClick = (direction: 1 | -1) => {
     if (!deviceStatus) return;
     const currentF = deviceStatus[side].targetTemperatureF;

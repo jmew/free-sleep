@@ -191,7 +191,9 @@ export default function TemperatureScheduleChart() {
   const { data: settings } = useSettings();
   const theme = useTheme();
 
-  const isLevel = settings?.temperatureFormat === 'level';
+  // Always level mode (-10..+10); the F selector was removed.
+  const isLevel = true;
+  void settings;
   const yMin = isLevel ? MIN_TEMP_LEVEL : MIN_TEMP_F;
   const yMax = isLevel ? MAX_TEMP_LEVEL : MAX_TEMP_F;
 

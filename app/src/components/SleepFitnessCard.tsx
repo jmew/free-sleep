@@ -45,46 +45,47 @@ function formatDuration(start: string, end: string): string {
 }
 
 // Half-circle gauge built from many thin radial ticks, mimicking the 8 Sleep
-// "Sleep fitness score" dial. Ticks before the score's angular threshold are
-// drawn at the score's color, ticks after are dim — so the dial fills as the
-// score climbs.
+// "Sleep fitness score" dial. The arc itself is decorative — every tick is
+// drawn uniformly in the score color, and the numeric score sits cleanly
+// inside the half-disc.
 function ArcGauge({ score, color }: { score: number; color: string }) {
-  const TICKS = 70;
+  const TICKS = 90;
   const VB_W = 360;
-  const VB_H = 220;
+  const VB_H = 200;
   const cx = VB_W / 2;
-  const cy = 200;
-  const innerR = 110;
-  const outerR = 160;
-  const filled = Math.round((score / 100) * TICKS);
+  const cy = VB_H - 6;            // bottom-center of the arc
+  const innerR = 96;
+  const outerR = 150;
+  // Score number vertically centered inside the half-disc.
+  const numberY = cy - innerR * 0.45;
 
   return (
-    <svg viewBox={ `0 0 ${VB_W} ${VB_H}` } style={ { display: 'block', width: '100%', maxHeight: 220 } }>
+    <svg viewBox={ `0 0 ${VB_W} ${VB_H}` } style={ { display: 'block', width: '100%' } }>
       { Array.from({ length: TICKS }).map((_, i) => {
-        // Spread ticks evenly from 180° (left horizon) to 0° (right horizon).
         const angle = 180 - (i / (TICKS - 1)) * 180;
         const rad = (angle * Math.PI) / 180;
         const x1 = cx + innerR * Math.cos(rad);
         const y1 = cy - innerR * Math.sin(rad);
         const x2 = cx + outerR * Math.cos(rad);
         const y2 = cy - outerR * Math.sin(rad);
-        const isFilled = i < filled;
         return (
           <line
             key={ i }
             x1={ x1 } y1={ y1 } x2={ x2 } y2={ y2 }
-            stroke={ isFilled ? color : 'rgba(255,255,255,0.18)' }
-            strokeWidth={ 2 }
+            stroke={ color }
+            strokeOpacity={ 0.85 }
+            strokeWidth={ 1.4 }
             strokeLinecap="round"
           />
         );
       }) }
       <text
-        x={ cx } y={ cy - 30 }
+        x={ cx } y={ numberY }
         fill={ palette.text.primary }
-        fontSize={ 96 }
+        fontSize={ 84 }
         fontWeight={ 300 }
         textAnchor="middle"
+        dominantBaseline="middle"
         fontFamily="inherit"
         style={ { letterSpacing: '-0.04em' } }
       >

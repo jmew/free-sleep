@@ -48,7 +48,9 @@ export default function SideControl({ showTemp }: SideControlProps) {
   const { data: deviceStatus } = useDeviceStatus();
   const { data: presence } = usePresence();
 
-  const isLevel = settings?.temperatureFormat === 'level';
+  // Temperature display is permanently in -10..+10 level mode now that the
+  // user-facing format selector has been removed.
+  const isLevel = true;
   return (
     <ToggleButtonGroup
       color="primary"

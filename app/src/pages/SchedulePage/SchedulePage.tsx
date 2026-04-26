@@ -10,8 +10,8 @@ import AlarmAccordion from './AlarmSection/AlarmAccordion.tsx';
 import ApplyToOtherDaysAccordion from './ApplyToOtherDaysAccordion.tsx';
 import DayTabs from './DayTabs.tsx';
 import EnabledSwitch from './EnabledSwitch.tsx';
+import FloatingSaveBar from './FloatingSaveBar.tsx';
 import PageContainer from '../PageContainer.tsx';
-import SaveButton from './SaveButton.tsx';
 import SideControl from '../../components/SideControl.tsx';
 import PowerScheduleSection from './PowerScheduleSection.tsx';
 import TemperatureAdjustmentsAccordion from './TemperatureAdjustmentsAccordion.tsx';
@@ -56,7 +56,9 @@ export default function SchedulePage() {
   // 'displayCelsius' is now repurposed: true = use the -10..+10 'level' format.
   // Old prop name kept to avoid touching all the child components — the boolean
   // value still drives the same conditional in formatTemperature.
-  const displayCelsius = settings?.temperatureFormat === 'level';
+  // Always level mode (-10..+10); the F selector was removed.
+  const displayCelsius = true;
+  void settings;
   // TODO: Add changes lost notification using changesPresent when user tries to switch tab before saving
 
   useEffect(() => {
@@ -75,6 +77,16 @@ export default function SchedulePage() {
   useEffect(() => {
     reloadScheduleData();
   }, [side]);
+
+  // Discard any in-progress edits when the page unmounts (user navigates to
+  // another tab). The store is a Zustand singleton that survives unmount, so
+  // without this the user would come back and see their unsaved changes
+  // still pending — which the user explicitly does NOT want here.
+  useEffect(() => {
+    return () => {
+      reloadScheduleData();
+    };
+  }, [reloadScheduleData]);
 
   const handleSave = async () => {
     setIsUpdating(true);
@@ -133,14 +145,14 @@ export default function SchedulePage() {
       </ErrorBoundary>
 
       <PowerScheduleSection displayCelsius={ displayCelsius }/>
-      <Box sx={ { mt: 2, display: 'flex', justifyContent: 'space-between', width: '100%', mb: 2 } }>
+      <Box sx={ { mt: 2, display: 'flex', width: '100%', mb: 2 } }>
         <EnabledSwitch/>
-        <SaveButton onSave={ handleSave }/>
       </Box>
       <TemperatureAdjustmentsAccordion displayCelsius={ displayCelsius }/>
       <AlarmAccordion/>
       <ApplyToOtherDaysAccordion/>
 
+      <FloatingSaveBar onSave={ handleSave }/>
     </PageContainer>
   );
 }

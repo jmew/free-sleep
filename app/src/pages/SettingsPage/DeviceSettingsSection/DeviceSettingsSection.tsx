@@ -4,7 +4,6 @@ import { Box } from '@mui/material';
 import { Settings } from '@api/settingsSchema.ts';
 import Section from '../Section.tsx';
 import TimeZoneSelector from './TimeZoneSelector.tsx';
-import TemperatureFormatSelector from './TemperatureFormatSelector.tsx';
 import DailyReboot from './DailyReboot.tsx';
 import LedBrightnessSlider from './LedBrightnessSlider.tsx';
 import { useSettings } from '@api/settings.ts';
@@ -25,7 +24,6 @@ export default function DeviceSettingsSection({ updateSettings }: DeviceSettings
     <Section title="Device settings">
       <Box display='flex' flexDirection='column' gap={ 1 }>
         <TimeZoneSelector settings={ settings } updateSettings={ updateSettings }/>
-        <TemperatureFormatSelector settings={ settings } updateSettings={ updateSettings }/>
         <DailyReboot settings={ settings } updateSettings={ updateSettings }/>
         <LedBrightnessSlider/>
         <ErrorBoundary componentName='Device info'>

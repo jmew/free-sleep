@@ -68,7 +68,7 @@ export default function ControlTempPage() {
         currentTargetTemp={ sideStatus?.targetTemperatureF || 55 }
         refetch={ refetch }
         currentTemperatureF={ sideStatus?.currentTemperatureF || 55 }
-        displayCelsius={ settings?.temperatureFormat === 'level' || false }
+        displayCelsius={ true }
       />
 
       { isError ? (

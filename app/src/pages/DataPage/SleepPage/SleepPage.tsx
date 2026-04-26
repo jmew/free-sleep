@@ -18,7 +18,6 @@ import WeeklyScheduleBars from './WeeklyScheduleBars.tsx';
 import { SleepRecord } from '../../../../../server/src/db/sleepRecordsSchema.ts';
 import { useAppStore } from '@state/appStore.tsx';
 import { useSleepRecords } from '@api/sleep.ts';
-import { useTheme } from '@mui/material/styles';
 import { useVitalsRecords, useVitalsSummary } from '@api/vitals.ts';
 import ErrorBoundary from '@components/ErrorBoundary.tsx';
 import { palette } from '@design/tokens';
@@ -89,7 +88,6 @@ export default function SleepPage() {
     const newEndTime = endTime.clone().add(1, 'week');
     setEndTime(newEndTime);
   };
-  const theme = useTheme();
   // The displayed end of the visible week is `endTime - 2 days` (see the
   // formatter and WeekStrip below). Compare against that so the chevron shows
   // as soon as the user is viewing a week prior to the current one.
@@ -121,18 +119,18 @@ export default function SleepPage() {
             justifyContent: 'space-between',
             alignItems: 'center',
             width: '70%',
-            color: theme.palette.grey[500],
-            fontSize: '0.85rem',
+            color: palette.text.primary,
+            fontSize: '0.95rem',
             mt: 0.5,
             mx: 'auto',
           } }>
-          <NavigateBeforeIcon onClick={ handlePrevWeek } sx={ { cursor: 'pointer', fontSize: 18 } }/>
-          <Typography sx={ { fontSize: '0.85rem' } }>
+          <NavigateBeforeIcon onClick={ handlePrevWeek } sx={ { cursor: 'pointer', fontSize: 22 } }/>
+          <Typography sx={ { fontSize: '0.95rem', color: palette.text.primary, fontWeight: 500 } }>
             { startTime.format('MMM D') } – { displayedEnd.format('MMM D') }
           </Typography>
-          <Box sx={ { width: 18, display: 'flex', justifyContent: 'center' } }>
+          <Box sx={ { width: 22, display: 'flex', justifyContent: 'center' } }>
             { !isNextDisabled && (
-              <NavigateNextIcon onClick={ handleNextWeek } sx={ { cursor: 'pointer', fontSize: 18 } }/>
+              <NavigateNextIcon onClick={ handleNextWeek } sx={ { cursor: 'pointer', fontSize: 22 } }/>
             ) }
           </Box>
         </Box>

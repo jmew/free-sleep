@@ -2,7 +2,6 @@ import _ from 'lodash';
 import { create } from 'zustand';
 import { DailySchedule, DayOfWeek, Schedules } from '@api/schedulesSchema.ts';
 import { DeepPartial } from 'ts-essentials';
-import { AccordionExpanded } from './SchedulePage.types.ts';
 import { DaysSelected } from './SchedulePage.types.ts';
 import { useAppStore } from '@state/appStore.tsx';
 import { LOWERCASE_DAYS } from './days';
@@ -40,8 +39,6 @@ type ScheduleStore = {
 
   changesPresent: boolean,
   checkForChanges: () => void;
-  setAccordionExpanded: (accordion: AccordionExpanded) => void;
-  accordionExpanded: AccordionExpanded;
 
   validations: Validations;
   setValidations: (newValidations: DeepPartial<Validations>) => void;
@@ -72,7 +69,6 @@ export const useScheduleStore = create<ScheduleStore>((set, get) => ({
 
     set({
       selectedDays: { ...DEFAULT_DAYS_SELECTED },
-      accordionExpanded: undefined,
       validations: { ...DEFAULT_VALIDATIONS },
       selectedSchedule,
       changesPresent: false,
@@ -85,12 +81,6 @@ export const useScheduleStore = create<ScheduleStore>((set, get) => ({
     const selectedDay = LOWERCASE_DAYS[newSelectedDayIndex];
     set({ selectedDay, selectedDayIndex: newSelectedDayIndex });
     reloadScheduleData();
-  },
-
-  accordionExpanded: undefined,
-  setAccordionExpanded: (accordionExpanded) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    get().accordionExpanded === accordionExpanded ? set({ accordionExpanded: undefined }) : set({ accordionExpanded });
   },
 
   validations: {

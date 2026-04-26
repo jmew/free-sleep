@@ -5,7 +5,3 @@ export type DaysSelected = Record<
   boolean
 >;
 
-
-
-export type AccordionExpanded = undefined | 'applyToDays' | 'temperatureAdjustments' | 'alarm';
-

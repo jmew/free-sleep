@@ -6,15 +6,14 @@ import { palette } from '@design/tokens';
 import { DeepPartial } from 'ts-essentials';
 import moment from 'moment-timezone';
 
-import AlarmAccordion from './AlarmSection/AlarmAccordion.tsx';
-import ApplyToOtherDaysAccordion from './ApplyToOtherDaysAccordion.tsx';
+import AlarmSection from './AlarmSection/AlarmSection.tsx';
+import CopyToOtherDays from './CopyToOtherDays.tsx';
 import DayTabs from './DayTabs.tsx';
-import EnabledSwitch from './EnabledSwitch.tsx';
 import FloatingSaveBar from './FloatingSaveBar.tsx';
 import PageContainer from '../PageContainer.tsx';
 import SideControl from '../../components/SideControl.tsx';
 import PowerScheduleSection from './PowerScheduleSection.tsx';
-import TemperatureAdjustmentsAccordion from './TemperatureAdjustmentsAccordion.tsx';
+import TemperatureAdjustmentsSection from './TemperatureAdjustmentsSection.tsx';
 import { DayOfWeek, Schedules } from '@api/schedulesSchema.ts';
 import { postSchedules } from '@api/schedules';
 import { useAppStore } from '@state/appStore.tsx';
@@ -140,17 +139,17 @@ export default function SchedulePage() {
       <SideControl/>
 
       <DayTabs/>
+      <Box sx={ { display: 'flex', justifyContent: 'flex-end', mt: -1 } }>
+        <CopyToOtherDays/>
+      </Box>
+
       <ErrorBoundary componentName='Scheduling chart'>
         <TemperatureScheduleChart />
       </ErrorBoundary>
 
       <PowerScheduleSection displayCelsius={ displayCelsius }/>
-      <Box sx={ { mt: 2, display: 'flex', width: '100%', mb: 2 } }>
-        <EnabledSwitch/>
-      </Box>
-      <TemperatureAdjustmentsAccordion displayCelsius={ displayCelsius }/>
-      <AlarmAccordion/>
-      <ApplyToOtherDaysAccordion/>
+      <TemperatureAdjustmentsSection displayCelsius={ displayCelsius }/>
+      <AlarmSection/>
 
       <FloatingSaveBar onSave={ handleSave }/>
     </PageContainer>

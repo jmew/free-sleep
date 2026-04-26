@@ -51,15 +51,19 @@ function formatDuration(start: string, end: string): string {
 function ArcGauge({ score, color }: { score: number; color: string }) {
   const TICKS = 90;
   const VB_W = 360;
-  const VB_H = 200;
-  const cx = VB_W / 2;
-  const cy = VB_H - 6;            // bottom-center of the arc
-  // Thin band of ticks near the outer edge of the half-disc — leaves a
-  // generous gap between the dial and the score number.
+  // Arc rendered as a half-ELLIPSE (Y squashed) so the gauge is wide and
+  // shallow rather than a full half-circle that wastes vertical space.
+  const Y_SQUASH = 0.55;
   const outerR = 152;
   const innerR = 142;
-  // Visual center of the half-disc, where the score number sits.
-  const numberY = cy - outerR * 0.5;
+  // Visible arc height with the Y squash applied — drives the SVG box and
+  // the score number's vertical position.
+  const arcHeight = outerR * Y_SQUASH;
+  const VB_H = Math.ceil(arcHeight + 12);
+  const cx = VB_W / 2;
+  const cy = VB_H - 6;            // bottom-center of the (squashed) arc
+  // Score number centered inside the half-ellipse.
+  const numberY = cy - arcHeight * 0.5;
 
   return (
     <svg viewBox={ `0 0 ${VB_W} ${VB_H}` } style={ { display: 'block', width: '100%' } }>
@@ -67,9 +71,9 @@ function ArcGauge({ score, color }: { score: number; color: string }) {
         const angle = 180 - (i / (TICKS - 1)) * 180;
         const rad = (angle * Math.PI) / 180;
         const x1 = cx + innerR * Math.cos(rad);
-        const y1 = cy - innerR * Math.sin(rad);
+        const y1 = cy - innerR * Math.sin(rad) * Y_SQUASH;
         const x2 = cx + outerR * Math.cos(rad);
-        const y2 = cy - outerR * Math.sin(rad);
+        const y2 = cy - outerR * Math.sin(rad) * Y_SQUASH;
         return (
           <line
             key={ i }

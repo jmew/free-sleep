@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { connectFranken } from '../../8sleep/frankenServer.js';
+import { FrankenCommandTimeoutError, getDeviceStatusCoalesced } from '../../8sleep/frankenServer.js';
 import { DeviceStatus, DeviceStatusSchema } from './deviceStatusSchema.js';
 import logger from '../../logger.js';
 import { updateDeviceStatus } from './updateDeviceStatus.js';
@@ -9,9 +9,19 @@ import { DeepPartial } from 'ts-essentials';
 const router = express.Router();
 
 router.get('/deviceStatus', async (req: Request, res: Response) => {
-  const franken = await connectFranken();
-  const resp = await franken.getDeviceStatus();
-  res.json(resp);
+  try {
+    const resp = await getDeviceStatusCoalesced();
+    res.json(resp);
+  } catch (error) {
+    if (error instanceof FrankenCommandTimeoutError) {
+      logger.warn(`/deviceStatus timed out: ${error.message}`);
+      res.status(503).json({
+        error: { message: 'Pod did not respond in time, retrying connection' },
+      });
+      return;
+    }
+    throw error;
+  }
 });
 
 

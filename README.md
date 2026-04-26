@@ -89,6 +89,13 @@ Vitals are inserted once every 60 seconds & you can access the raw data @ <POD_I
 - REST API for managing device settings, schedules, and status.
 - Modular design with routes for `deviceStatus`, `settings`, `schedules`, and `execute`.
 - Uses Node.js and Express for lightweight, fast operations.
+- WebSocket push at `/ws/events` for real-time UI updates — temperature
+  changes, scheduled jobs, and service-health flips arrive instantly without
+  the app polling. Falls back to polling automatically if the socket drops.
+- Per-command timeouts on the dac.sock pipe so a hung pod doesn't stall
+  the rest of the server (5s default; tunable via `FRANKEN_COMMAND_TIMEOUT_MS`).
+- `/api/metrics/server` exposes Franken queue depth, p50/p95 command latency,
+  timeout counts, and WS client count for debugging.
 
 ---
 

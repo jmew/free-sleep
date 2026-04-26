@@ -6,6 +6,7 @@ import { useSettings } from '@api/settings.ts';
 import { useServices } from '@api/services.ts';
 import { closeSentry, initSentryTags } from '../sentry.tsx';
 import { useDeviceStatus } from '@api/deviceStatus.ts';
+import { useEventStream } from '@api/eventStream.ts';
 
 export type Side = 'left' | 'right';
 
@@ -34,6 +35,10 @@ export const useAppStore = create<AppState>((set) => ({
 
 // AppStoreProvider to sync Zustand with react-query's isFetching
 export function AppStoreProvider({ children }: React.PropsWithChildren) {
+  // One WebSocket for the whole app — pushes device-status/service-health
+  // updates straight into the React Query cache. Mounted at the tree root so
+  // there's no per-page connection churn.
+  useEventStream();
   const { data: settings } = useSettings();
   const { data: services } = useServices();
   const { data: deviceStatus } = useDeviceStatus();

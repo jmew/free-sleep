@@ -14,6 +14,8 @@ import { scheduleAlarm, scheduleAlarmOverride } from './alarmScheduler.js';
 import { schedulePowerOffAndSleepAnalysis, schedulePowerOn } from './powerScheduler.js';
 import { schedulePrimingRebootAndCalibration } from './primeScheduler.js';
 import { scheduleTemperatures } from './temperatureScheduler.js';
+import eventBus from '../events/eventBus.js';
+import { emitJobEvent } from './jobEvents.js';
 
 
 async function setupJobs() {
@@ -60,11 +62,22 @@ async function setupJobs() {
     serverStatus.status.powerSchedule.status = 'healthy';
     serverStatus.status.rebootSchedule.status = 'healthy';
     serverStatus.status.temperatureSchedule.status = 'healthy';
+    emitJobEvent({ jobName: 'setupJobs', status: 'ok' });
+    eventBus.emit('service-health', {
+      jobs: serverStatus.status.jobs,
+      alarmSchedule: serverStatus.status.alarmSchedule,
+      primeSchedule: serverStatus.status.primeSchedule,
+      powerSchedule: serverStatus.status.powerSchedule,
+      rebootSchedule: serverStatus.status.rebootSchedule,
+      temperatureSchedule: serverStatus.status.temperatureSchedule,
+    });
   } catch (error: unknown) {
     serverStatus.status.jobs.status = 'failed';
     const message = error instanceof Error ? error.message : String(error);
     logger.error(error);
     serverStatus.status.jobs.message = message;
+    emitJobEvent({ jobName: 'setupJobs', status: 'fail', message });
+    eventBus.emit('service-health', { jobs: serverStatus.status.jobs });
   }
 }
 

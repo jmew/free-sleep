@@ -8,7 +8,9 @@ import { ServerStatusKey, StatusInfo } from '@api/serverStatusSchema.ts';
 import { palette } from '@design/tokens';
 
 export default function StatusPage() {
-  const { data, isLoading, dataUpdatedAt } = useServerStatus(5_000);
+  // service-health pushes from the WebSocket invalidate this query, so a
+  // 30s safety-net poll is enough — no need for the old 5s.
+  const { data, isLoading, dataUpdatedAt } = useServerStatus(30_000);
   const updatedAt = moment(dataUpdatedAt);
   const formatted = updatedAt.format('h:mm:ss a');
 

@@ -2,9 +2,9 @@ import moment from 'moment-timezone';
 import logger from '../logger.js';
 import settingsDB from '../db/settings.js';
 import memoryDB from '../db/memoryDB.js';
-import { connectFranken } from './frankenServer.js';
+import { connectFranken, FrankenCommandTimeoutError } from './frankenServer.js';
 import { wait } from './promises.js';
-import { DeviceStatus, Version } from '../routes/deviceStatus/deviceStatusSchema.js';
+import { DeviceStatus } from '../routes/deviceStatus/deviceStatusSchema.js';
 import { Side } from '../db/schedulesSchema.js';
 import { Gesture, GestureSchema } from '../db/settingsSchema.js';
 import { updateDeviceStatus } from '../routes/deviceStatus/updateDeviceStatus.js';
@@ -13,7 +13,12 @@ import { DeepPartial } from 'ts-essentials';
 import serverStatus from '../serverStatus.js';
 import { trimixBase } from './trimixBaseControl.js';
 import { BASE_PRESETS } from './basePresets.js';
+import eventBus from '../events/eventBus.js';
 
+// Pod 4+ only: gestures and the 2s cadence are the only path. The Pod 3
+// 60s slow-poll branch was removed alongside the WebSocket initiative.
+const ACTIVE_POLL_MS = 2_000;
+const IDLE_POLL_MS = 10_000;
 
 
 export class FrankenMonitor {
@@ -34,9 +39,7 @@ export class FrankenMonitor {
     this.isRunning = true;
     this.frankenLoop().catch(error => {
       logger.error(error);
-      serverStatus.status.frankenMonitor.status = 'failed';
-      serverStatus.status.frankenMonitor.message = String(error);
-      serverStatus.status.frankenMonitor.timestamp = moment.tz().format();
+      this.markStatus('failed', String(error));
     });
   }
 
@@ -46,10 +49,20 @@ export class FrankenMonitor {
     this.isRunning = false;
   }
 
+  private markStatus(status: 'healthy' | 'failed', message = '') {
+    const prev = serverStatus.status.frankenMonitor.status;
+    serverStatus.status.frankenMonitor.status = status;
+    serverStatus.status.frankenMonitor.message = message;
+    serverStatus.status.frankenMonitor.timestamp = moment.tz().format();
+    if (prev !== status) {
+      eventBus.emit('service-health', { frankenMonitor: serverStatus.status.frankenMonitor });
+    }
+  }
+
   private async processGesture(side: Side, gesture: Gesture) {
     const behavior = settingsDB.data[side].taps[gesture];
     logger.debug(`[processGesture] side: ${side}, gesture: ${gesture}, type: ${behavior.type}`);
-    
+
     if (behavior.type === 'temperature') {
       const currentTemperatureTarget = this.deviceStatus![side].targetTemperatureF;
       let newTemperatureTargetF;
@@ -65,19 +78,17 @@ export class FrankenMonitor {
       await markManualTempChange(side);
       return;
     } else if (behavior.type === 'base_control') {
-      // Cycle between relax and flat presets
       this.currentBasePreset =
         this.currentBasePreset === 'relax' ? 'flat' : 'relax';
 
       const targetPreset = BASE_PRESETS[this.currentBasePreset];
-      
+
       logger.info(
         `[quadTap] Cycling base to ${this.currentBasePreset} preset:`,
         targetPreset,
       );
 
       try {
-        // Update memory DB to reflect movement
         if (memoryDB.data) {
           memoryDB.data.baseStatus = {
             head: targetPreset.head,
@@ -89,7 +100,6 @@ export class FrankenMonitor {
           await memoryDB.write();
         }
 
-        // Control the base via BLE
         if (this.currentBasePreset === 'flat') {
           await trimixBase.goToFlat();
         } else {
@@ -103,7 +113,6 @@ export class FrankenMonitor {
         logger.error(
           `[quadTap] Failed to set base preset: ${error instanceof Error ? error.message : String(error)}`,
         );
-        // Revert preset state on error
         this.currentBasePreset =
         this.currentBasePreset === 'relax' ? 'flat' : 'relax';
       }
@@ -136,46 +145,55 @@ export class FrankenMonitor {
     this.processGesturesForSide(nextDeviceStatus, 'right');
   }
 
+  // Cheap deep-equality for the status payload. The shape is stable so a
+  // JSON round-trip is the simplest correct comparison.
+  private hasStatusChanged(next: DeviceStatus): boolean {
+    if (!this.deviceStatus) return true;
+    return JSON.stringify(this.deviceStatus) !== JSON.stringify(next);
+  }
+
+  private currentWaitTime(): number {
+    return eventBus.clientCount > 0 ? ACTIVE_POLL_MS : IDLE_POLL_MS;
+  }
 
   private async frankenLoop() {
     const franken = await connectFranken();
-    this.deviceStatus = await franken.getDeviceStatus(false);
-    let hasGestures = this.deviceStatus.coverVersion !== Version.Pod3;
-    let waitTime = hasGestures ? 2_000 : 60_000;
-    if (hasGestures) {
-      this.deviceStatus = await franken.getDeviceStatus(true);
-      logger.debug(`Gestures supported for ${this.deviceStatus.coverVersion}`);
-    } else {
-      logger.debug(`Gestures not supported for ${this.deviceStatus.coverVersion}`);
-    }
-    // No point in querying device status every 3 seconds for checking the prime status...
+    this.deviceStatus = await franken.getDeviceStatus(true);
+    eventBus.emit('device-status', this.deviceStatus);
+
     while (this.isRunning) {
       try {
         while (this.isRunning) {
-          hasGestures = this.deviceStatus.coverVersion !== Version.Pod3;
-          waitTime = hasGestures ? 2_000 : 60_000;
-          await wait(waitTime);
+          await wait(this.currentWaitTime());
           if (!this.isRunning) break;
-          const franken = await connectFranken();
-          const nextDeviceStatus = await franken.getDeviceStatus(hasGestures);
+          const f = await connectFranken();
+          let nextDeviceStatus: DeviceStatus;
+          try {
+            nextDeviceStatus = await f.getDeviceStatus(true);
+          } catch (error) {
+            if (error instanceof FrankenCommandTimeoutError) {
+              logger.warn(`FrankenMonitor: ${error.message}; will retry next tick`);
+              this.markStatus('failed', error.message);
+              continue;
+            }
+            throw error;
+          }
+
           await settingsDB.read();
-          if (hasGestures) {
-            this.processGestures(nextDeviceStatus);
+          this.processGestures(nextDeviceStatus);
+
+          if (this.hasStatusChanged(nextDeviceStatus)) {
+            eventBus.emit('device-status', nextDeviceStatus);
           }
           this.deviceStatus = nextDeviceStatus;
-          serverStatus.status.frankenMonitor.status = 'healthy';
-          serverStatus.status.frankenMonitor.message = '';
-          serverStatus.status.frankenMonitor.timestamp = moment.tz().format();
+          this.markStatus('healthy', '');
         }
       } catch (error) {
-        serverStatus.status.frankenMonitor.status = 'failed';
-        serverStatus.status.frankenMonitor.message = String(error);
-        serverStatus.status.frankenMonitor.timestamp = moment.tz().format();
+        this.markStatus('failed', String(error));
         logger.error(error instanceof Error ? error.message : String(error), 'franken disconnected');
-        await wait(waitTime);
+        await wait(this.currentWaitTime());
       }
     }
     logger.debug('FrankenMonitor loop exited');
   }
 }
-

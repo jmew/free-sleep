@@ -33,6 +33,10 @@ export default defineConfig({
   build: {
     sourcemap: !isDemoMode,
     outDir: isDemoMode ? './dist/' : '../server/public/',
+    // mui-vendor and date-vendor (moment-timezone) are intentionally large —
+    // they're long-lived browser caches that change rarely. The actual user-
+    // facing bundle is the entry chunk + active route, which are both small.
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         entryFileNames: 'index.js', // Set the name for the JS entry file
@@ -42,6 +46,31 @@ export default defineConfig({
             return 'index.css';
           }
           return '[name]-[hash].[ext]';
+        },
+        // Split big vendors so they cache independently across deploys. Order
+        // matters: the more specific check (x-charts/d3) runs before the
+        // catch-all @mui bucket so chart code doesn't accidentally land in
+        // mui-vendor.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined;
+          if (
+            id.includes('node_modules/@mui/x-charts') ||
+            id.includes('node_modules/d3')
+          ) return 'charts-vendor';
+          if (
+            id.includes('node_modules/@mui/') ||
+            id.includes('node_modules/@emotion/')
+          ) return 'mui-vendor';
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/react-router')
+          ) return 'react-vendor';
+          if (
+            id.includes('node_modules/moment') ||
+            id.includes('node_modules/date-fns')
+          ) return 'date-vendor';
+          return undefined;
         },
       },
     },

@@ -1,14 +1,25 @@
 import express from 'express';
-import { connectFranken } from '../../8sleep/frankenServer.js';
+import { FrankenCommandTimeoutError, getDeviceStatusCoalesced } from '../../8sleep/frankenServer.js';
 import { DeviceStatusSchema } from './deviceStatusSchema.js';
 import logger from '../../logger.js';
 import { updateDeviceStatus } from './updateDeviceStatus.js';
 import { markManualTempChange } from '../../jobs/scheduleOverride.js';
 const router = express.Router();
 router.get('/deviceStatus', async (req, res) => {
-    const franken = await connectFranken();
-    const resp = await franken.getDeviceStatus();
-    res.json(resp);
+    try {
+        const resp = await getDeviceStatusCoalesced();
+        res.json(resp);
+    }
+    catch (error) {
+        if (error instanceof FrankenCommandTimeoutError) {
+            logger.warn(`/deviceStatus timed out: ${error.message}`);
+            res.status(503).json({
+                error: { message: 'Pod did not respond in time, retrying connection' },
+            });
+            return;
+        }
+        throw error;
+    }
 });
 router.post('/deviceStatus', async (req, res) => {
     const { body } = req;

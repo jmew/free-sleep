@@ -4,25 +4,29 @@ import * as Sentry from '@sentry/react';
 
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { createRoot } from 'react-dom/client';
-import { CssBaseline } from '@mui/material';
+import { Box, CircularProgress, CssBaseline } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { StrictMode } from 'react';
+import { lazy, StrictMode, Suspense } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 
-import ControlTempPage from './pages/ControlTempPage/ControlTempPage';
-import SettingsPage from './pages/SettingsPage/SettingsPage';
 import Layout from './components/Layout';
 import { AppStoreProvider } from '@state/appStore.tsx';
-import SchedulePage from './pages/SchedulePage/SchedulePage.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
 import { GlobalStyles } from '@mui/material';
-import SleepPage from './pages/DataPage/SleepPage/SleepPage.tsx';
-import VitalsPage from './pages/DataPage/VitalsPage/VitalsPage.tsx';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
-import LogsPage from './pages/DataPage/LogsPage/LogsPage.tsx';
-import StatusPage from './pages/StatusPage/StatusPage.tsx';
-import BaseControlPage from './pages/BaseControlPage/BaseControlPage.tsx';
+
+// Pages are lazy-loaded so each route ships only what it needs. The shell
+// (Layout, AppStoreProvider, theme, query client) stays in the entry chunk so
+// the first paint doesn't wait on a route-specific download.
+const ControlTempPage = lazy(() => import('./pages/ControlTempPage/ControlTempPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage/SettingsPage'));
+const SchedulePage = lazy(() => import('./pages/SchedulePage/SchedulePage.tsx'));
+const SleepPage = lazy(() => import('./pages/DataPage/SleepPage/SleepPage.tsx'));
+const VitalsPage = lazy(() => import('./pages/DataPage/VitalsPage/VitalsPage.tsx'));
+const LogsPage = lazy(() => import('./pages/DataPage/LogsPage/LogsPage.tsx'));
+const StatusPage = lazy(() => import('./pages/StatusPage/StatusPage.tsx'));
+const BaseControlPage = lazy(() => import('./pages/BaseControlPage/BaseControlPage.tsx'));
 
 const darkTheme = createTheme({
   palette: {
@@ -108,6 +112,14 @@ const queryClient = new QueryClient({
 
 const SentryRoutes = Sentry.withSentryReactRouterV7Routing(Routes);
 
+// Centred spinner while a route chunk is downloading. Kept tiny on purpose —
+// gets shown for sub-second loads on the LAN, so fanfare would feel laggy.
+const RouteFallback = () => (
+  <Box sx={ { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' } }>
+    <CircularProgress />
+  </Box>
+);
+
 
 const App = () => {
   return (
@@ -158,29 +170,31 @@ const App = () => {
               } }
             />
             <BrowserRouter basename="/">
-              <SentryRoutes>
-                <Route path="/" element={ <Layout/> }>
-                  <Route index element={ <ControlTempPage/> }/>
-                  <Route path="temperature" element={ <ControlTempPage/> }/>
-                  <Route path="left" element={ <ControlTempPage/> }/>
-                  <Route path="right" element={ <ControlTempPage/> }/>
-                  <Route path="elevation" element={ <BaseControlPage/> }/>
-                  <Route path="status" element={ <StatusPage /> } />
+              <Suspense fallback={ <RouteFallback /> }>
+                <SentryRoutes>
+                  <Route path="/" element={ <Layout/> }>
+                    <Route index element={ <ControlTempPage/> }/>
+                    <Route path="temperature" element={ <ControlTempPage/> }/>
+                    <Route path="left" element={ <ControlTempPage/> }/>
+                    <Route path="right" element={ <ControlTempPage/> }/>
+                    <Route path="elevation" element={ <BaseControlPage/> }/>
+                    <Route path="status" element={ <StatusPage /> } />
 
-                  { /* Sleep tab: directly renders SleepPage. The DataPage menu wrapper
-                       is gone; "Logs" is now reachable from Settings. /data still
-                       redirects to /sleep for old links. */ }
-                  <Route path="sleep" element={ <SleepPage/> }/>
-                  <Route path="data" element={ <SleepPage/> }/>
-                  <Route path="data/sleep" element={ <SleepPage/> }/>
-                  <Route path="data/logs" element={ <LogsPage/> }/>
-                  <Route path="data/vitals" element={ <VitalsPage/> }/>
-                  <Route path="logs" element={ <LogsPage/> }/>
+                    { /* Sleep tab: directly renders SleepPage. The DataPage menu wrapper
+                         is gone; "Logs" is now reachable from Settings. /data still
+                         redirects to /sleep for old links. */ }
+                    <Route path="sleep" element={ <SleepPage/> }/>
+                    <Route path="data" element={ <SleepPage/> }/>
+                    <Route path="data/sleep" element={ <SleepPage/> }/>
+                    <Route path="data/logs" element={ <LogsPage/> }/>
+                    <Route path="data/vitals" element={ <VitalsPage/> }/>
+                    <Route path="logs" element={ <LogsPage/> }/>
 
-                  <Route path="settings" element={ <SettingsPage/> }/>
-                  <Route path="schedules" element={ <SchedulePage/> }/>
-                </Route>
-              </SentryRoutes>
+                    <Route path="settings" element={ <SettingsPage/> }/>
+                    <Route path="schedules" element={ <SchedulePage/> }/>
+                  </Route>
+                </SentryRoutes>
+              </Suspense>
             </BrowserRouter>
           </AppStoreProvider>
         </LocalizationProvider>

@@ -2,7 +2,7 @@ import './instrument.js';
 import express from 'express';
 import schedule from 'node-schedule';
 import logger from './logger.js';
-import { connectFranken, disconnectFranken } from './8sleep/frankenServer.js';
+import { connectFranken, disconnectFranken, getFrankenQueueDepth } from './8sleep/frankenServer.js';
 import { FrankenMonitor } from './8sleep/frankenMonitor.js';
 import './jobs/jobScheduler.js';
 // Setup code
@@ -13,6 +13,8 @@ import serverStatus from './serverStatus.js';
 import { prisma } from './db/prisma.js';
 import { setupSentryTags } from './setupSentryTags.js';
 import { loadWifiSignalStrength } from './8sleep/wifiSignalStrength.js';
+import metrics from './metrics/metrics.js';
+import { wsServer } from './ws/wsServer.js';
 const port = 3000;
 const app = express();
 let server;
@@ -56,6 +58,12 @@ async function gracefulShutdown(signal) {
     await schedule.gracefulShutdown();
     await disconnectPrisma();
     try {
+        await wsServer.close();
+    }
+    catch (err) {
+        logger.error(`Error closing WS server: ${err}`);
+    }
+    try {
         if (server) {
             // Stop accepting new connections
             server.close(() => {
@@ -93,12 +101,14 @@ const initFrankenMonitor = () => {
 };
 // Main startup function
 async function startServer() {
+    metrics.registerFrankenQueueDepth(getFrankenQueueDepth);
     setupMiddleware(app);
     setupRoutes(app);
     // Listen on desired port
     server = app.listen(port, () => {
         logger.debug(`Server running on http://localhost:${port}`);
     });
+    wsServer.attach(server);
     serverStatus.status.express.status = 'healthy';
     serverStatus.status.logger.status = 'healthy';
     // Initialize Franken once before listening

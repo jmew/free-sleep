@@ -9,7 +9,9 @@ import settingsDB from '../db/settings.js';
 import { executeFunction } from '../8sleep/deviceApi.js';
 import { getDayIndexForSchedule, logJob } from './utils.js';
 import { connectFranken } from '../8sleep/frankenServer.js';
+import { emitJobEvent } from './jobEvents.js';
 export const executeAlarm = async ({ vibrationIntensity, duration, vibrationPattern, side, force = false }) => {
+    emitJobEvent({ jobName: `alarm-${side}`, status: 'started' });
     try {
         const min10Duration = Math.max(10, duration);
         // Exit is side is in away mode
@@ -51,12 +53,14 @@ export const executeAlarm = async ({ vibrationIntensity, duration, vibrationPatt
         }, min10Duration * 1_000);
         serverStatus.status.alarmSchedule.status = 'healthy';
         serverStatus.status.alarmSchedule.message = '';
+        emitJobEvent({ jobName: `alarm-${side}`, status: 'ok' });
     }
     catch (error) {
         serverStatus.status.alarmSchedule.status = 'failed';
         const message = error instanceof Error ? error.message : String(error);
         serverStatus.status.alarmSchedule.message = message;
         logger.error(error);
+        emitJobEvent({ jobName: `alarm-${side}`, status: 'fail', message });
     }
 };
 /**

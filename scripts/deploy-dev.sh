@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# Build locally, then scp only the build artifacts whose CONTENT changed since
-# the last successful deploy. Detection is content-hash based — no git diff,
-# no source→artifact mapping, no marker SHA. The only state kept locally is
-# .deploy-state/manifest.txt (sha256 of each file shipped last time).
+# Build locally, sync any new server runtime deps from local node_modules, then
+# scp only the build artifacts whose CONTENT changed since the last successful
+# deploy. The Pod can't `npm install` (WAN is blocked) so we use the local
+# package-lock.json as the source of truth and tar+ship missing packages from
+# the dev machine's server/node_modules.
+#
+# State kept locally:
+#   .deploy-state/manifest.txt — sha256 of each file shipped last time
+#   .deploy-state/pod-package-lock.json — last known Pod lockfile
 #
 # Usage:
-#   ./scripts/deploy-dev.sh             # build + scp changed files + restart
-#   ./scripts/deploy-dev.sh --frontend  # only server/public/
+#   ./scripts/deploy-dev.sh             # build + sync deps + scp changed files + restart
+#   ./scripts/deploy-dev.sh --frontend  # only server/public/ (skip dep sync)
 #   ./scripts/deploy-dev.sh --backend   # only server/dist/
 #   ./scripts/deploy-dev.sh --biometrics  # one-shot: scp biometrics/ + restart free-sleep-stream
 #   ./scripts/deploy-dev.sh --full      # ignore manifest; push every file
@@ -112,6 +117,77 @@ if [ "$SKIP_BUILD" = "false" ]; then
   fi
 else
   warn "Skipping build (--no-build)."
+fi
+
+# --------------------------------------------------------------------------------
+# 1.5. Sync server/node_modules diffs (Pod can't `npm install` — WAN is blocked).
+#      Local package-lock.json is the source of truth; we tar+ship any package
+#      dir whose version differs from the Pod's, and rm packages the Pod no
+#      longer needs.
+if [ "$DO_BACKEND" = "true" ]; then
+  say "Checking server runtime deps for changes..."
+  POD_LOCK_TMP="$STATE_DIR/pod-package-lock.json"
+  : > "$POD_LOCK_TMP"
+  pod "cat /home/dac/free-sleep/server/package-lock.json 2>/dev/null" > "$POD_LOCK_TMP" || true
+
+  DIFF_OUT="$STATE_DIR/nm-diff.txt"
+  if ! node "$REPO_ROOT/scripts/_diff-node-modules.mjs" \
+       "$REPO_ROOT/server/package-lock.json" "$POD_LOCK_TMP" > "$DIFF_OUT" 2>&1; then
+    warn "node_modules diff failed; skipping dep sync"
+    : > "$DIFF_OUT"
+  fi
+
+  if [ -s "$DIFF_OUT" ]; then
+    add_count=$(grep -c '^ADD ' "$DIFF_OUT" 2>/dev/null || true)
+    del_count=$(grep -c '^DEL ' "$DIFF_OUT" 2>/dev/null || true)
+    add_count=${add_count:-0}
+    del_count=${del_count:-0}
+    say "Dep diff: +${add_count}, -${del_count}"
+
+    # Process DELs: rm -rf on Pod (one ssh, multiple paths).
+    if [ "$del_count" -gt 0 ]; then
+      del_cmd=""
+      while IFS= read -r line; do
+        path="${line#DEL }"
+        del_cmd+="rm -rf '/home/dac/free-sleep/server/${path}'; "
+      done < <(grep '^DEL ' "$DIFF_OUT")
+      pod "$del_cmd" || warn "Some dep removals failed"
+    fi
+
+    # Process ADDs: tar paths from local, pipe through ssh, extract on Pod.
+    # Single tar+ssh round trip handles N packages.
+    if [ "$add_count" -gt 0 ]; then
+      ADD_LIST="$STATE_DIR/nm-add-paths.txt"
+      grep '^ADD ' "$DIFF_OUT" | sed 's/^ADD //' > "$ADD_LIST"
+
+      missing=0
+      while IFS= read -r path; do
+        if [ ! -e "$REPO_ROOT/server/$path" ]; then
+          warn "Missing locally: server/${path} — run 'cd server && npm install'"
+          missing=$((missing + 1))
+        fi
+      done < "$ADD_LIST"
+      if [ "$missing" -gt 0 ]; then
+        fail "${missing} dep dir(s) missing locally; deploy aborted."
+      fi
+
+      ( cd "$REPO_ROOT/server" && tar -cf - -T "$ADD_LIST" 2>/dev/null ) | \
+        ssh "${SSH_OPTS[@]}" "$SSH_TARGET" \
+          "mkdir -p /home/dac/free-sleep/server && tar -xf - -C /home/dac/free-sleep/server && chown -R dac:dac /home/dac/free-sleep/server/node_modules" \
+        || fail "Dep upload failed."
+      ok "Synced ${add_count} dep dir(s) to Pod."
+    fi
+
+    # Ship the lockfile + package.json so the Pod's baseline matches local for
+    # the next deploy. Without this, every run thinks deps are out of sync.
+    scp "${SCP_OPTS[@]}" -q \
+      "$REPO_ROOT/server/package.json" \
+      "$REPO_ROOT/server/package-lock.json" \
+      "${SSH_TARGET}:/home/dac/free-sleep/server/" \
+      || warn "Failed to ship package.json/package-lock.json"
+  else
+    ok "Server deps unchanged."
+  fi
 fi
 
 # --------------------------------------------------------------------------------

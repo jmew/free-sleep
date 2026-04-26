@@ -6,10 +6,15 @@ import info from '../server/src/serverInfo.json';
 
 const isDemoMode = process.env.VITE_ENV === 'demo';
 const isProdMode = process.env.VITE_ENV === 'prod';
+// The Sentry Vite plugin walks every chunk to inject release IDs and tries to
+// upload sourcemaps. Without an auth token it logs two warnings per build and
+// does no useful work — gate it on the token being present so self-hosters
+// (the common case) get a quiet build.
+const hasSentryAuth = Boolean(process.env.SENTRY_AUTH_TOKEN);
 
 const plugins = [react(), tsconfigPaths()];
 
-if (isProdMode) {
+if (isProdMode && hasSentryAuth) {
   plugins.push(sentryVitePlugin({
     org: 'free-sleep',
     project: 'app',

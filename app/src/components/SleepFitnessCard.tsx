@@ -50,54 +50,61 @@ function formatDuration(start: string, end: string): string {
 // inside the half-disc.
 function ArcGauge({ score, color }: { score: number; color: string }) {
   const TICKS = 90;
-  const VB_W = 360;
-  // Arc rendered as a half-ELLIPSE (Y squashed) so the gauge is wide and
-  // shallow rather than a full half-circle that wastes vertical space.
-  const Y_SQUASH = 0.55;
-  const outerR = 152;
-  const innerR = 142;
-  // Visible arc height with the Y squash applied — drives the SVG box and
-  // the score number's vertical position.
-  const arcHeight = outerR * Y_SQUASH;
-  const VB_H = Math.ceil(arcHeight + 12);
+  // Geometric semicircle (NOT a squashed ellipse): arc height equals its
+  // radius. The SVG is sized by an explicit pixel height so the card stays
+  // ~the same total height as before; the natural 2:1 semicircle aspect
+  // ratio is preserved by allowing the SVG width to scale with that height.
+  const outerR = 80;
+  const innerR = 70;
+  const PAD_X = 16;
+  const PAD_TOP = 6;
+  const PAD_BOT = 6;
+  const VB_W = outerR * 2 + PAD_X * 2;
+  const VB_H = outerR + PAD_TOP + PAD_BOT;
   const cx = VB_W / 2;
-  const cy = VB_H - 6;            // bottom-center of the (squashed) arc
-  // Score number centered inside the half-ellipse.
-  const numberY = cy - arcHeight * 0.5;
+  const cy = VB_H - PAD_BOT; // bottom-center of the semicircle
+  const numberY = cy - outerR * 0.5;
 
   return (
-    <svg viewBox={ `0 0 ${VB_W} ${VB_H}` } style={ { display: 'block', width: '100%' } }>
-      { Array.from({ length: TICKS }).map((_, i) => {
-        const angle = 180 - (i / (TICKS - 1)) * 180;
-        const rad = (angle * Math.PI) / 180;
-        const x1 = cx + innerR * Math.cos(rad);
-        const y1 = cy - innerR * Math.sin(rad) * Y_SQUASH;
-        const x2 = cx + outerR * Math.cos(rad);
-        const y2 = cy - outerR * Math.sin(rad) * Y_SQUASH;
-        return (
-          <line
-            key={ i }
-            x1={ x1 } y1={ y1 } x2={ x2 } y2={ y2 }
-            stroke={ color }
-            strokeOpacity={ 0.85 }
-            strokeWidth={ 1.4 }
-            strokeLinecap="round"
-          />
-        );
-      }) }
-      <text
-        x={ cx } y={ numberY }
-        fill={ palette.text.primary }
-        fontSize={ 64 }
-        fontWeight={ 300 }
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fontFamily="inherit"
-        style={ { letterSpacing: '-0.03em' } }
+    <Box sx={ { display: 'flex', justifyContent: 'center', width: '100%' } }>
+      <svg
+        viewBox={ `0 0 ${VB_W} ${VB_H}` }
+        // height capped so the rendered card stays compact; width follows
+        // the viewBox aspect (so the arc remains a true circle, not stretched).
+        style={ { display: 'block', height: 200, width: 'auto', maxWidth: '100%' } }
       >
-        { score }
-      </text>
-    </svg>
+        { Array.from({ length: TICKS }).map((_, i) => {
+          const angle = 180 - (i / (TICKS - 1)) * 180;
+          const rad = (angle * Math.PI) / 180;
+          const x1 = cx + innerR * Math.cos(rad);
+          const y1 = cy - innerR * Math.sin(rad);
+          const x2 = cx + outerR * Math.cos(rad);
+          const y2 = cy - outerR * Math.sin(rad);
+          return (
+            <line
+              key={ i }
+              x1={ x1 } y1={ y1 } x2={ x2 } y2={ y2 }
+              stroke={ color }
+              strokeOpacity={ 0.85 }
+              strokeWidth={ 0.9 }
+              strokeLinecap="round"
+            />
+          );
+        }) }
+        <text
+          x={ cx } y={ numberY }
+          fill={ palette.text.primary }
+          fontSize={ 44 }
+          fontWeight={ 300 }
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontFamily="inherit"
+          style={ { letterSpacing: '-0.03em' } }
+        >
+          { score }
+        </text>
+      </svg>
+    </Box>
   );
 }
 

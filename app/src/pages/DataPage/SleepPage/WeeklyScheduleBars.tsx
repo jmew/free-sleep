@@ -87,6 +87,7 @@ export default function WeeklyScheduleBars() {
 
   return (
     <MetricChartCard
+      title="WEEKLY SCHEDULE"
       stats={ [
         { label: 'ASLEEP', value: asleep },
         { label: 'AWAKE', value: awake },

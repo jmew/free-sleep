@@ -16,15 +16,16 @@ type VitalsLineChartProps = {
 const METRIC_CONFIG: Record<
   Metric,
   {
+    title: string;
     primaryLabel: string;
     secondaryLabel: string;
     unit: string;
     targetRange?: [number, number];
   }
 > = {
-  heart_rate:    { primaryLabel: 'AT REST',         secondaryLabel: 'YOUR RANGE',     unit: 'bpm' },
-  hrv:           { primaryLabel: 'TONIGHT',         secondaryLabel: 'NIGHTLY RANGE',  unit: 'ms', targetRange: [50, 100] },
-  breathing_rate:{ primaryLabel: 'TONIGHT',         secondaryLabel: 'NIGHTLY RANGE',  unit: 'brpm', targetRange: [12, 20] },
+  heart_rate:    { title: 'HEART RATE',     primaryLabel: 'AT REST', secondaryLabel: 'YOUR RANGE',    unit: 'bpm' },
+  hrv:           { title: 'HRV',            primaryLabel: 'TONIGHT', secondaryLabel: 'NIGHTLY RANGE', unit: 'ms',   targetRange: [50, 100] },
+  breathing_rate:{ title: 'BREATHING RATE', primaryLabel: 'TONIGHT', secondaryLabel: 'NIGHTLY RANGE', unit: 'brpm', targetRange: [12, 20] },
 };
 
 function downsample<T>(arr: T[], maxPoints: number): T[] {
@@ -73,6 +74,7 @@ export default function VitalsLineChart({ vitalsRecords, metric }: VitalsLineCha
 
   return (
     <MetricChartCard
+      title={ cfg.title }
       stats={ [
         { label: cfg.primaryLabel, value: primaryValue },
         { label: cfg.secondaryLabel, value: rangeText },

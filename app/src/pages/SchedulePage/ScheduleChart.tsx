@@ -10,7 +10,6 @@ import { DailySchedule, Time } from '../../../../server/src/db/schedulesSchema.t
 import { useSettings } from '@api/settings.ts';
 import {
   fahrenheitToLevel,
-  formatTemperature,
   MAX_TEMP_LEVEL,
   MAX_TEMP_F,
   MIN_TEMP_LEVEL,
@@ -229,7 +228,15 @@ export default function TemperatureScheduleChart() {
           min: yMin,
           max: yMax,
           tickLabelStyle: { fill: axisColor },
-          valueFormatter: (value: number) => formatTemperature(value, isLevel) ,
+          valueFormatter: (value: number) => {
+            // Data is already converted to the displayed unit by buildSeriesData
+            // — DON'T run formatTemperature(value, isLevel) here, that would
+            // re-convert level→level and produce nonsense labels (the Y-axis
+            // showed -26..-34 for level 0).
+            const v = Math.round(value);
+            if (isLevel) return v > 0 ? `+${v}` : String(v);
+            return `${v}°F`;
+          },
         }] }
         series={ [{
           id: 'targeTempF',

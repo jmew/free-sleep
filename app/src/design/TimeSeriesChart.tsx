@@ -66,7 +66,7 @@ export default function TimeSeriesChart({
             top: 12,
             bottom: 40,
             left: 8,
-            right: 50,
+            right: 62,
             pointerEvents: 'none',
             // Vertical position within the plot area is computed by mapping
             // the target range to a percentage of [padded[0], padded[1]].
@@ -88,7 +88,7 @@ export default function TimeSeriesChart({
       <LineChart
         width={ width }
         height={ height }
-        margin={ { top: 12, bottom: 32, left: 8, right: 44 } }
+        margin={ { top: 12, bottom: 32, left: 8, right: 56 } }
         colors={ [lineColor] }
         dataset={ data.map((p) => ({ ...p })) }
         xAxis={ [{

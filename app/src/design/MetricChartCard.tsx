@@ -12,6 +12,8 @@ type Stat = {
 };
 
 type MetricChartCardProps = {
+  /** Optional metric name shown as the card title (e.g. "Heart rate"). */
+  title?: string;
   /** 1–4 stat blocks shown horizontally across the top of the card. */
   stats: Stat[];
   /** Chart content rendered below the header. */
@@ -28,9 +30,20 @@ type MetricChartCardProps = {
  *   stats=[{ label: "TODAY", value: "48 ms" }, { label: "7-DAY AVERAGE", value: "46 ms" }]
  *   stats=[{ label: "DEEP SLEEP", value: "1h 20m" }, { label: "REM", value: "1h 11m" }]
  */
-export default function MetricChartCard({ stats, children }: MetricChartCardProps) {
+export default function MetricChartCard({ title, stats, children }: MetricChartCardProps) {
   return (
     <GlassCard sx={ { p: 2.5 } }>
+      { title && (
+        <Typography
+          sx={ {
+            ...typography.sectionLabel,
+            color: palette.text.tertiary,
+            mb: 1.5,
+          } }
+        >
+          { title }
+        </Typography>
+      ) }
       <Box sx={ { display: 'flex', gap: 4, mb: 2.5, flexWrap: 'wrap' } }>
         { stats.map((s, i) => (
           <Box key={ i } sx={ { minWidth: 0 } }>

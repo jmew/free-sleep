@@ -9,6 +9,7 @@ import {
   Typography
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { sx as designSx } from '@design/tokens';
 import { AccordionExpanded } from './SchedulePage.types.ts';
 import { DayOfWeek } from '@api/schedulesSchema.ts';
 import { useAppStore } from '@state/appStore.tsx';
@@ -52,7 +53,7 @@ export default function ApplyToOtherDaysAccordion() {
 
   return (
     <Accordion
-      sx={ { width: '100%', mt: -2 } }
+      sx={ { ...designSx.glassAccordion } }
       expanded={ accordionExpanded === ACCORDION_NAME }
       onChange={ () => setAccordionExpanded(ACCORDION_NAME) }
       disabled={ !selectedSchedule?.power.enabled }

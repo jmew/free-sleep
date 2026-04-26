@@ -13,6 +13,7 @@ import {
 import { Add, ExpandMore, Remove } from '@mui/icons-material';
 import _ from 'lodash';
 import moment from 'moment-timezone';
+import { sx as designSx } from '@design/tokens';
 import { useScheduleStore } from './scheduleStore';
 import { useAppStore } from '@state/appStore.tsx';
 import { DailySchedule } from '@api/schedulesSchema.ts';
@@ -100,7 +101,7 @@ export default function TemperatureAdjustmentsAccordion({ displayCelsius }: { di
 
   return (
     <Accordion
-      sx={ { width: '100%' } }
+      sx={ { ...designSx.glassAccordion } }
       disabled={ !selectedSchedule?.power.enabled }
       expanded={ accordionExpanded === ACCORDION_NAME }
       onChange={ () => setAccordionExpanded(ACCORDION_NAME) }

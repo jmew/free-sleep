@@ -108,6 +108,8 @@ export default function SchedulePage() {
         maxWidth: { xs: '100%', sm: '800px' },
         mx: 'auto',
         mb: 15,
+        gap: 2.5,
+        alignItems: 'stretch',
       } }
     >
       <Typography

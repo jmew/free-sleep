@@ -1,4 +1,5 @@
-import { Box, InputAdornment, Paper, Slider, TextField, Typography } from '@mui/material';
+import { Box, InputAdornment, Slider, TextField, Typography } from '@mui/material';
+import GlassCard from '@design/GlassCard';
 import { useAppStore } from '@state/appStore.tsx';
 import { useScheduleStore } from './scheduleStore.tsx';
 import {
@@ -22,7 +23,7 @@ export default function PowerScheduleSection({ displayCelsius }: { displayCelsiu
   const disabled = !selectedSchedule?.power.enabled || isUpdating;
   const onTemperatureValue = selectedSchedule?.power?.onTemperature || 82;
   return (
-    <Paper elevation={ 2 } sx={ { pt: 2, pl: 4, pr: 4, pb: 2, width: '100%' } }>
+    <GlassCard sx={ { pt: 2, pl: 4, pr: 4, pb: 2 } }>
       <Box sx={ { display: 'flex', alignItems: 'center', gap: 3, p: 0, width: '100%', mb: 3 } }>
         { /* Start time */ }
         <TextField
@@ -103,6 +104,6 @@ export default function PowerScheduleSection({ displayCelsius }: { displayCelsiu
           } }
         />
       </Box>
-    </Paper>
+    </GlassCard>
   );
 }

@@ -79,7 +79,11 @@ export default function SleepPage() {
     setEndTime(newEndTime);
   };
   const theme = useTheme();
-  const isNextDisabled = endTime && moment(endTime).isSameOrAfter(moment(), 'week');
+  // The displayed end of the visible week is `endTime - 2 days` (see the
+  // formatter and WeekStrip below). Compare against that so the chevron shows
+  // as soon as the user is viewing a week prior to the current one.
+  const displayedEnd = endTime.clone().subtract(2, 'day');
+  const isNextDisabled = displayedEnd.isSameOrAfter(moment(), 'week');
 
   return (
     <ErrorBoundary componentName="Sleep page">
@@ -100,21 +104,6 @@ export default function SleepPage() {
         </Typography>
 
         <SideControl/>
-        <ErrorBoundary componentName="Week strip">
-          <WeekStrip
-            selectedDate={ endTime.clone().subtract(2, 'day') }
-            selectedRecord={ selectedSleepRecord }
-            onSelectDay={ (day, record) => {
-              if (record) {
-                setSelectedSleepRecord(record);
-              }
-              const weekStart = day.clone().startOf('isoWeek').subtract(1, 'day');
-              const weekEnd = day.clone().endOf('isoWeek').add(2, 'day');
-              setStartTime(weekStart);
-              setEndTime(weekEnd);
-            } }
-          />
-        </ErrorBoundary>
         <Box
           sx={ {
             display: 'flex',
@@ -128,7 +117,7 @@ export default function SleepPage() {
           } }>
           <NavigateBeforeIcon onClick={ handlePrevWeek } sx={ { cursor: 'pointer', fontSize: 18 } }/>
           <Typography sx={ { fontSize: '0.85rem' } }>
-            { startTime.format('MMM D') } – { endTime.clone().subtract(2, 'day').format('MMM D') }
+            { startTime.format('MMM D') } – { displayedEnd.format('MMM D') }
           </Typography>
           <Box sx={ { width: 18, display: 'flex', justifyContent: 'center' } }>
             { !isNextDisabled && (
@@ -136,6 +125,21 @@ export default function SleepPage() {
             ) }
           </Box>
         </Box>
+        <ErrorBoundary componentName="Week strip">
+          <WeekStrip
+            selectedDate={ displayedEnd }
+            selectedRecord={ selectedSleepRecord }
+            onSelectDay={ (day, record) => {
+              if (record) {
+                setSelectedSleepRecord(record);
+              }
+              const weekStart = day.clone().startOf('isoWeek').subtract(1, 'day');
+              const weekEnd = day.clone().endOf('isoWeek').add(2, 'day');
+              setStartTime(weekStart);
+              setEndTime(weekEnd);
+            } }
+          />
+        </ErrorBoundary>
         {
           sleepRecords?.length === 0 && <NoData/>
         }

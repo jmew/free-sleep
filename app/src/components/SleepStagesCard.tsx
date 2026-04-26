@@ -224,10 +224,16 @@ export default function SleepStagesCard({ startTime, endTime }: Props) {
   const periodStart = moment(startTime).unix();
   const periodEnd = moment(endTime).unix();
 
-  // Use the period's actual length for the "Time slept" stat, not the sum of
-  // stage durations (defensive — in case of upstream double-counting bugs the
-  // user spotted earlier).
-  const totalDurationSeconds = useMemo(() => Math.max(0, periodEnd - periodStart), [periodEnd, periodStart]);
+  // "Time slept" = total time in the period MINUS the time classified as
+  // awake. So lying in bed scrolling on the phone after the alarm doesn't
+  // count toward your sleep total. Falls back to period length when stage
+  // data is missing.
+  const totalDurationSeconds = useMemo(() => {
+    const period = Math.max(0, periodEnd - periodStart);
+    if (!data) return period;
+    const awake = data.totals.awake || 0;
+    return Math.max(0, period - awake);
+  }, [data, periodEnd, periodStart]);
   const totalDuration = formatHM(totalDurationSeconds);
   const totalHours = totalDurationSeconds / 3600;
   const inRange = totalHours >= TARGET_HOURS[0] && totalHours <= TARGET_HOURS[1];

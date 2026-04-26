@@ -18,12 +18,14 @@ import { useAppStore } from '@state/appStore.tsx';
 import { DailySchedule } from '@api/schedulesSchema.ts';
 import ThermostatIcon from '@mui/icons-material/Thermostat';
 
-import { formatTemperature } from '@lib/temperatureConversions.ts';
+import { formatTemperature, levelToFahrenheit } from '@lib/temperatureConversions.ts';
 import AccessTime from '@mui/icons-material/AccessTime';
 import { useTheme } from '@mui/material/styles';
 
 const ACCORDION_NAME = 'temperatureAdjustments';
-const TEMPERATURES_LIST = _.range(55, 111); // Generates a range from 55 to 110 inclusive
+const TEMPERATURES_LIST_F = _.range(55, 111); // 55..110 °F (one entry per °F)
+// Level mode: 21 entries from -10..+10. Each maps to its °F equivalent for storage.
+const TEMPERATURES_LIST_LEVEL = _.range(-10, 11).map((lvl) => levelToFahrenheit(lvl));
 
 export default function TemperatureAdjustmentsAccordion({ displayCelsius }: { displayCelsius: boolean }) {
   const {
@@ -176,7 +178,7 @@ export default function TemperatureAdjustmentsAccordion({ displayCelsius }: { di
                   size='small'
                 >
                   {
-                    TEMPERATURES_LIST.map((temp) => (
+                    (displayCelsius ? TEMPERATURES_LIST_LEVEL : TEMPERATURES_LIST_F).map((temp) => (
                       <MenuItem key={ temp } value={ temp }>
                         { formatTemperature(temp, displayCelsius) }
                       </MenuItem>

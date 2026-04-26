@@ -1,7 +1,16 @@
 import { Box, InputAdornment, Paper, Slider, TextField, Typography } from '@mui/material';
 import { useAppStore } from '@state/appStore.tsx';
 import { useScheduleStore } from './scheduleStore.tsx';
-import { formatTemperature, getTemperatureColor, MAX_TEMP_F, MIN_TEMP_F } from '@lib/temperatureConversions.ts';
+import {
+  formatTemperature,
+  getTemperatureColor,
+  MAX_TEMP_F,
+  MIN_TEMP_F,
+  MAX_TEMP_LEVEL,
+  MIN_TEMP_LEVEL,
+  fahrenheitToLevel,
+  levelToFahrenheit,
+} from '@lib/temperatureConversions.ts';
 import PowerOffTime from './PowerOffTime.tsx';
 import AccessTime from '@mui/icons-material/AccessTime';
 import { useTheme } from '@mui/material/styles';
@@ -53,33 +62,43 @@ export default function PowerScheduleSection({ displayCelsius }: { displayCelsiu
         <Typography sx={ { mb: 0, textAlign: 'center' } } variant="body2" color={ theme.palette.grey[200] }>
           { `Power on temperature ${formatTemperature(selectedSchedule?.power?.onTemperature || 82, displayCelsius)}` }
         </Typography>
+        { /* In level mode the slider operates in level units (-10..+10, step 1)
+             and converts to/from F for storage. In F mode it stays at 1°F steps.
+             Storage in onTemperature is always F. */ }
         <Slider
-          value={ onTemperatureValue }
+          value={ displayCelsius ? fahrenheitToLevel(onTemperatureValue) : onTemperatureValue }
 
           onChange={ (_, newValue) => {
+            const num = newValue as number;
+            const asF = displayCelsius ? levelToFahrenheit(num) : num;
             updateSelectedSchedule({
               power: {
                 // @ts-ignore
-                onTemperature: newValue
+                onTemperature: asF,
               }
             });
           } }
-          min={ MIN_TEMP_F }
-          max={ MAX_TEMP_F }
+          min={ displayCelsius ? MIN_TEMP_LEVEL : MIN_TEMP_F }
+          max={ displayCelsius ? MAX_TEMP_LEVEL : MAX_TEMP_F }
           step={ 1 }
           marks={ [
-            { value: MIN_TEMP_F, label: formatTemperature(MIN_TEMP_F, displayCelsius) },
-            { value: MAX_TEMP_F, label: formatTemperature(MAX_TEMP_F, displayCelsius) },
+            {
+              value: displayCelsius ? MIN_TEMP_LEVEL : MIN_TEMP_F,
+              label: formatTemperature(MIN_TEMP_F, displayCelsius),
+            },
+            {
+              value: displayCelsius ? MAX_TEMP_LEVEL : MAX_TEMP_F,
+              label: formatTemperature(MAX_TEMP_F, displayCelsius),
+            },
           ] }
           disabled={ disabled }
           sx={ {
-            color: getTemperatureColor(onTemperatureValue), // red track and thumb
+            color: getTemperatureColor(onTemperatureValue),
             width: '100%',
-            // ✅ label font color
             '& .MuiSlider-markLabel': {
-              color: theme.palette.grey[500], // <--- your color here
-              fontSize: '0.75rem', // optional
-              fontWeight: 500, // optional
+              color: theme.palette.grey[500],
+              fontSize: '0.75rem',
+              fontWeight: 500,
             },
           } }
         />

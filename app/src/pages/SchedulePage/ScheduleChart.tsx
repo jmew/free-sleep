@@ -222,7 +222,7 @@ export default function TemperatureScheduleChart() {
           max: xData[xData.length - 1],
           tickMinStep: 60 * 60 * 1000,
           tickNumber: 4,
-          label: '°F',
+          label: isLevel ? 'level' : '°F',
           tickLabelStyle: { fill: axisColor },
         }] }
         yAxis={ [{

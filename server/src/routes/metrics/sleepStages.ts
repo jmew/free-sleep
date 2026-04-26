@@ -111,16 +111,19 @@ router.get(
       orderBy: { timestamp: 'asc' },
     });
 
-    // Dedupe by timestamp — defensive against historical data inserted before
-    // the (side, timestamp) unique constraint was enforced. Without this, a
-    // duplicate row would inflate stage totals (one night reporting 40+ hours
-    // is the symptom).
-    const seenTs = new Set<number>();
-    const vitals = vitalsRaw.filter((v) => {
-      if (seenTs.has(v.timestamp)) return false;
-      seenTs.add(v.timestamp);
-      return true;
-    });
+    // Dedupe by 5-min bucket. Vitals are nominally on 5-min boundaries but in
+    // practice arrive at slightly-off timestamps; multiple records inside the
+    // same 5-min window would each produce a 300s epoch, double-counting time
+    // (the "REM = 18h for one night" symptom). Snap each vital to its bucket
+    // start, keep the first per bucket.
+    const byBucket = new Map<number, typeof vitalsRaw[number]>();
+    for (const v of vitalsRaw) {
+      const bucket = Math.floor(v.timestamp / 300) * 300;
+      if (!byBucket.has(bucket)) {
+        byBucket.set(bucket, { ...v, timestamp: bucket });
+      }
+    }
+    const vitals = Array.from(byBucket.values()).sort((a, b) => a.timestamp - b.timestamp);
 
     const movements = await prisma.movement.findMany({
       where: { side, timestamp: { gte: startUnix, lte: endUnix } },

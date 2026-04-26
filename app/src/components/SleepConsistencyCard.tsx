@@ -101,20 +101,22 @@ export default function SleepConsistencyCard({ weekRecords, weekStart }: Props) 
 
   const { days, matchedRecords, times, avgBed, avgWake, yMin, yMax, inRange } = view;
 
-  // SVG layout — kept fairly short on the page; the bars convey rhythm at
-  // a glance and don't need a tall plot area.
+  // SVG carries only the bars and bands — text labels are rendered as HTML
+  // alongside the SVG so the SVG's `preserveAspectRatio="none"` stretch
+  // doesn't distort the typography. The bars span the full viewBox width
+  // (no PAD_LEFT/PAD_RIGHT) so the day labels rendered in an HTML flex row
+  // below align perfectly with the bar centers.
   const VB_W = 1000;
-  const VB_H = 240;
-  const PAD_TOP = 14;
-  const PAD_BOTTOM = 32;
-  const PAD_RIGHT = 110;
-  const PAD_LEFT = 16;
+  const VB_H = 200;
+  const PAD_TOP = 12;
+  const PAD_BOTTOM = 12;
   const plotH = VB_H - PAD_TOP - PAD_BOTTOM;
-  const plotW = VB_W - PAD_LEFT - PAD_RIGHT;
-  const barWidth = 18;
+  const barWidth = 22;
+  const CHART_HEIGHT = 150;
+  const TIMES_COL_WIDTH = 60;
 
   const yOf = (h: number) => PAD_TOP + ((h - yMin) / (yMax - yMin)) * plotH;
-  const xOf = (i: number) => PAD_LEFT + (i + 0.5) * (plotW / 7);
+  const xOf = (i: number) => (i + 0.5) * (VB_W / 7);
 
   const todayIdx = days.findIndex((d) => d.isSame(moment(), 'day'));
 
@@ -122,6 +124,10 @@ export default function SleepConsistencyCard({ weekRecords, weekStart }: Props) 
   const bedBandBot = yOf(avgBed + TOLERANCE_HOURS);
   const wakeBandTop = yOf(avgWake - TOLERANCE_HOURS);
   const wakeBandBot = yOf(avgWake + TOLERANCE_HOURS);
+  // Vertical position of each band's center as a percentage of the chart
+  // height — used to anchor the HTML time labels to the right of the SVG.
+  const bedBandPct = (((bedBandTop + bedBandBot) / 2) / VB_H) * 100;
+  const wakeBandPct = (((wakeBandTop + wakeBandBot) / 2) / VB_H) * 100;
 
   // Header text style — mirrors the page title's letter-spacing /
   // proportional digits so the times read at the same rhythm as the rest of
@@ -154,90 +160,117 @@ export default function SleepConsistencyCard({ weekRecords, weekStart }: Props) 
       </Box>
 
       <Box sx={ { width: '100%' } }>
-        <svg
-          viewBox={ `0 0 ${VB_W} ${VB_H}` }
-          preserveAspectRatio="none"
-          style={ { display: 'block', width: '100%', height: 180 } }
-        >
-          { /* Translucent green bands at the average bedtime + waketime */ }
-          <rect
-            x={ PAD_LEFT } y={ bedBandTop }
-            width={ plotW } height={ Math.max(2, bedBandBot - bedBandTop) }
-            fill={ TARGET_GREEN_BAND }
-          />
-          <rect
-            x={ PAD_LEFT } y={ wakeBandTop }
-            width={ plotW } height={ Math.max(2, wakeBandBot - wakeBandTop) }
-            fill={ TARGET_GREEN_BAND }
-          />
-
-          { /* Dashed guide lines at the edges of each band */ }
-          { [bedBandTop, bedBandBot, wakeBandTop, wakeBandBot].map((y, i) => (
-            <line
-              key={ i }
-              x1={ PAD_LEFT } x2={ PAD_LEFT + plotW }
-              y1={ y } y2={ y }
-              stroke="rgba(34,197,94,0.5)"
-              strokeWidth={ 1 }
-              strokeDasharray="4 4"
-            />
-          )) }
-
-          { /* One vertical bar per day, only for days with a record */ }
-          { days.map((_, i) => {
-            const rec = matchedRecords[i];
-            if (!rec) return null;
-            const t = times[present(matchedRecords, i)];
-            const top = yOf(t.bedH);
-            const bot = yOf(t.wakeH);
-            const x = xOf(i) - barWidth / 2;
-            const fill = inRange(t) ? TARGET_GREEN : '#ffffff';
-            return (
+        { /* Chart row: SVG bars/bands on the left, HTML time labels on the
+             right (HTML so they don't get stretched by the SVG's
+             preserveAspectRatio="none"). */ }
+        <Box sx={ { display: 'flex', height: CHART_HEIGHT } }>
+          <Box sx={ { flex: 1, position: 'relative', minWidth: 0 } }>
+            <svg
+              viewBox={ `0 0 ${VB_W} ${VB_H}` }
+              preserveAspectRatio="none"
+              style={ { display: 'block', width: '100%', height: '100%' } }
+            >
+              { /* Translucent green bands at the average bedtime + waketime */ }
               <rect
-                key={ i }
-                x={ x } y={ top }
-                width={ barWidth } height={ Math.max(4, bot - top) }
-                fill={ fill }
-                rx={ barWidth / 2 } ry={ barWidth / 2 }
+                x={ 0 } y={ bedBandTop }
+                width={ VB_W } height={ Math.max(2, bedBandBot - bedBandTop) }
+                fill={ TARGET_GREEN_BAND }
               />
-            );
-          }) }
+              <rect
+                x={ 0 } y={ wakeBandTop }
+                width={ VB_W } height={ Math.max(2, wakeBandBot - wakeBandTop) }
+                fill={ TARGET_GREEN_BAND }
+              />
 
-          { /* Right-side time labels for the average bed/wake */ }
-          <text
-            x={ VB_W - PAD_RIGHT + 12 } y={ (bedBandTop + bedBandBot) / 2 + 5 }
-            fill={ palette.text.tertiary } fontSize={ 18 }
-            fontFamily="inherit"
-          >
-            { formatShiftedHour(avgBed) }
-          </text>
-          <text
-            x={ VB_W - PAD_RIGHT + 12 } y={ (wakeBandTop + wakeBandBot) / 2 + 5 }
-            fill={ palette.text.tertiary } fontSize={ 18 }
-            fontFamily="inherit"
-          >
-            { formatShiftedHour(avgWake) }
-          </text>
+              { /* Dashed guide lines at the edges of each band */ }
+              { [bedBandTop, bedBandBot, wakeBandTop, wakeBandBot].map((y, i) => (
+                <line
+                  key={ i }
+                  x1={ 0 } x2={ VB_W }
+                  y1={ y } y2={ y }
+                  stroke="rgba(34,197,94,0.5)"
+                  strokeWidth={ 1 }
+                  strokeDasharray="4 4"
+                />
+              )) }
 
-          { /* X-axis day labels */ }
-          { days.map((day, i) => {
-            const isToday = i === todayIdx;
-            const label = isToday ? 'Today' : DAY_LETTERS[(day.isoWeekday() - 1)];
-            return (
-              <text
-                key={ i }
-                x={ xOf(i) } y={ VB_H - 10 }
-                fill={ isToday ? palette.text.primary : palette.text.tertiary }
-                fontSize={ 18 }
-                fontWeight={ isToday ? 600 : 400 }
-                textAnchor="middle"
-                fontFamily="inherit"
-              >
-                { label }
-              </text>
-            );
-          }) }
-        </svg>
+              { /* One vertical bar per day, only for days with a record */ }
+              { days.map((_, i) => {
+                const rec = matchedRecords[i];
+                if (!rec) return null;
+                const t = times[present(matchedRecords, i)];
+                const top = yOf(t.bedH);
+                const bot = yOf(t.wakeH);
+                const x = xOf(i) - barWidth / 2;
+                const fill = inRange(t) ? TARGET_GREEN : '#ffffff';
+                return (
+                  <rect
+                    key={ i }
+                    x={ x } y={ top }
+                    width={ barWidth } height={ Math.max(4, bot - top) }
+                    fill={ fill }
+                    rx={ barWidth / 2 } ry={ barWidth / 2 }
+                  />
+                );
+              }) }
+            </svg>
+          </Box>
+          <Box sx={ { width: TIMES_COL_WIDTH, position: 'relative', flexShrink: 0, pl: 1 } }>
+            <Typography
+              sx={ {
+                position: 'absolute',
+                top: `${bedBandPct}%`,
+                transform: 'translateY(-50%)',
+                fontSize: '0.8rem',
+                color: palette.text.tertiary,
+                whiteSpace: 'nowrap',
+              } }
+            >
+              { formatShiftedHour(avgBed) }
+            </Typography>
+            <Typography
+              sx={ {
+                position: 'absolute',
+                top: `${wakeBandPct}%`,
+                transform: 'translateY(-50%)',
+                fontSize: '0.8rem',
+                color: palette.text.tertiary,
+                whiteSpace: 'nowrap',
+              } }
+            >
+              { formatShiftedHour(avgWake) }
+            </Typography>
+          </Box>
+        </Box>
+
+        { /* Day labels: HTML row so the typography doesn't get stretched.
+             Each cell uses flex: 1 so the centers line up with the SVG bar
+             centers (which are at (i + 0.5) × VB_W / 7 with no left/right
+             padding in the SVG). The right-side spacer matches the time
+             labels column so the days only span the chart's width. */ }
+        <Box sx={ { display: 'flex', mt: 0.5 } }>
+          <Box sx={ { flex: 1, display: 'flex' } }>
+            { days.map((day, i) => {
+              const isToday = i === todayIdx;
+              const label = isToday ? 'Today' : DAY_LETTERS[(day.isoWeekday() - 1)];
+              return (
+                <Typography
+                  key={ i }
+                  sx={ {
+                    flex: 1,
+                    textAlign: 'center',
+                    fontSize: '0.8rem',
+                    fontWeight: isToday ? 600 : 400,
+                    color: isToday ? palette.text.primary : palette.text.tertiary,
+                  } }
+                >
+                  { label }
+                </Typography>
+              );
+            }) }
+          </Box>
+          <Box sx={ { width: TIMES_COL_WIDTH, flexShrink: 0 } } />
+        </Box>
       </Box>
     </GlassCard>
   );

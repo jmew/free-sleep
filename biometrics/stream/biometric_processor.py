@@ -168,9 +168,15 @@ class BiometricProcessor:
         self.window_size = runtime_params['window_size']
         self.runtime_params = runtime_params
         self.init_tracking()
-        # Increased from 10 → 30 so a brief quiet moment doesn't drop presence.
-        # Useful when you're in bed but momentarily still (e.g., between breaths).
-        self.no_presence_tolerance = 30
+        # Was 30s. The user reported their wife's "in-bed" indicator going
+        # yellow when she stayed still for a while, then green again on
+        # movement. Cause: piezos are AC-coupled — a perfectly still person
+        # produces only tiny breathing-amplitude signal that can fall below
+        # threshold for stretches of a minute or more. Bumping the tolerance
+        # to 3 minutes gives way more grace before declaring the bed empty,
+        # at the cost of detecting "person actually got out of bed" 3 min
+        # later instead of 30s later.
+        self.no_presence_tolerance = 180
         self.breathing_rate = 0
         self.hrv = 0
         self.not_present_for = 0
@@ -238,20 +244,25 @@ class BiometricProcessor:
         except Exception as e:
             logger.error(f'Error updating presence API: {e}')
 
-    def detect_presence(self, signal: np.ndarray):
-        # Cast to int64 first — the raw signal is int32 and contains sentinel
-        # values near -2^31 ("no data" markers). np.ptp in int32 wraps around
-        # on those, producing nonsense (often negative) ranges.
-        signal_64 = signal.astype(np.int64, copy=False)
+    @staticmethod
+    def _range_p98_p2(signal: np.ndarray) -> float:
+        """Percentile-based range robust to int32 sentinels and stray outliers."""
+        if signal is None or signal.size == 0:
+            return 0.0
+        s = signal.astype(np.int64, copy=False)
+        p2, p98 = np.percentile(s, [2, 98])
+        return float(p98 - p2)
 
-        # Use a percentile-based range (p98 - p2) instead of true max - min.
-        # A single sentinel sample shouldn't dominate the range. Robust to
-        # outliers; p98/p2 still captures real signal envelope.
-        if signal_64.size == 0:
-            signal_range = 0.0
-        else:
-            p2, p98 = np.percentile(signal_64, [2, 98])
-            signal_range = float(p98 - p2)
+    def detect_presence(self, signal1: np.ndarray, signal2: Union[None, np.ndarray] = None):
+        # Each side has TWO physical piezos (head + foot of that half of the
+        # bed). Until now presence detection only looked at signal1, throwing
+        # away half the available information. Use the MAX of the two — a
+        # person on the side compresses both piezos directly, so taking the
+        # max picks up activity even if the person's body is closer to one
+        # piezo than the other.
+        r1 = self._range_p98_p2(signal1)
+        r2 = self._range_p98_p2(signal2) if signal2 is not None else 0.0
+        signal_range = max(r1, r2)
 
         self._recent_ranges.append(signal_range)
 
@@ -261,14 +272,16 @@ class BiometricProcessor:
         decision = _PresenceCoordinator.report(self.side, signal_range)
         should_be_present = decision[self.side]
 
-        # Periodic debug log — includes both sides' ranges and the decision
-        # so we can see why we did (or didn't) flip.
+        # Periodic debug log — includes both piezos' individual ranges so we
+        # can see whether they're correlated (= real presence) or one is
+        # dominating (= asymmetric transmission).
         self._range_log_counter += 1
         if self._range_log_counter >= 30:
             self._range_log_counter = 0
             snap = _PresenceCoordinator.snapshot()
             logger.info(
-                f'[presence-debug] {self.side}: range={signal_range:.0f} '
+                f'[presence-debug] {self.side}: max={signal_range:.0f} '
+                f'p1={r1:.0f} p2={r2:.0f} '
                 f'L={snap["left_range"]:.0f} R={snap["right_range"]:.0f} '
                 f'decision_L={decision["left"]} decision_R={decision["right"]} '
                 f'present={self.present} not_present_for={self.not_present_for}'

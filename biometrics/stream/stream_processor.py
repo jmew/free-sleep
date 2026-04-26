@@ -44,9 +44,19 @@ class StreamProcessor:
         )
         self.iteration_count = 0
 
-    def check_presence(self, left1_signal: np.ndarray, right1_signal: np.ndarray):
-        self.left_processor.detect_presence(left1_signal)
-        self.right_processor.detect_presence(right1_signal)
+    def check_presence(
+        self,
+        left1_signal: np.ndarray,
+        right1_signal: np.ndarray,
+        left2_signal=None,
+        right2_signal=None,
+    ):
+        # Pass both piezos per side so detect_presence can use the max of
+        # head + foot piezo — improves coverage when a person isn't centred
+        # over a single sensor and gives the coordinator more signal to
+        # distinguish real occupancy from asymmetric transmission.
+        self.left_processor.detect_presence(left1_signal, left2_signal)
+        self.right_processor.detect_presence(right1_signal, right2_signal)
 
     def can_calculate_breath_rate(self):
         return (
@@ -67,13 +77,21 @@ class StreamProcessor:
             left1_signal = self.buffer.get_heart_rate_signal('left', 1)
             right1_signal = self.buffer.get_heart_rate_signal('right', 1)
 
+            # Pull signal2 for both sides up-front (only if dual sensors are
+            # available) so check_presence gets all four piezos.
+            left2_signal = None
+            right2_signal = None
+            if self.sensor_count == 2:
+                left2_signal = self.buffer.get_heart_rate_signal('left', 2)
+                right2_signal = self.buffer.get_heart_rate_signal('right', 2)
+
             log = self.iteration_count % 300 == 0
             epoch = piezo_record['ts']
             time = datetime.fromtimestamp(epoch)
             if log:
                 logger.debug(f'Process check - Processing piezo record @ {time.isoformat()}')
 
-            self.check_presence(left1_signal, right1_signal)
+            self.check_presence(left1_signal, right1_signal, left2_signal, right2_signal)
 
             # Process left side
             if self.left_processor.present_for > self.left_processor.heart_rate_window_seconds:

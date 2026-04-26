@@ -6,6 +6,7 @@ import {
   SxProps,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { sx as designSx } from '@design/tokens';
 import { AccordionExpanded } from '../SchedulePage.types.ts';
 import { useScheduleStore } from '../scheduleStore.tsx';
 import AlarmEnabledSwitch from './AlarmEnabledSwitch.tsx';
@@ -47,7 +48,7 @@ export default function AlarmAccordion() {
 
   return (
     <Accordion
-      sx={ { width: '100%', mt: -2 } }
+      sx={ { ...designSx.glassAccordion } }
       expanded={ accordionExpanded === ACCORDION_NAME }
       onChange={ () => setAccordionExpanded(ACCORDION_NAME) }
       disabled={ !selectedSchedule?.power.enabled }

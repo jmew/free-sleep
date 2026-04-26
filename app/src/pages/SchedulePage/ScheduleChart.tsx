@@ -1,8 +1,8 @@
 /* eslint-disable react/no-multi-comp */
 import { useTheme } from '@mui/material/styles';
 import { useMemo } from 'react';
-import { Paper } from '@mui/material';
 import { LineChart, lineElementClasses, areaElementClasses } from '@mui/x-charts/LineChart';
+import GlassCard from '@design/GlassCard';
 import { useDrawingArea } from '@mui/x-charts/hooks';
 
 import { useScheduleStore } from './scheduleStore.tsx';
@@ -211,7 +211,7 @@ export default function TemperatureScheduleChart() {
   const axisColor = theme.palette.grey['600'];
 
   return (
-    <Paper sx={ { width: '100%', height: 300, p: 2 } }>
+    <GlassCard sx={ { height: 300, p: 2 } }>
       <LineChart
         xAxis={ [{
           scaleType: 'time',
@@ -278,6 +278,6 @@ export default function TemperatureScheduleChart() {
           lineAlpha={ LINE_ALPHA }
         />
       </LineChart>
-    </Paper>
+    </GlassCard>
   );
 }

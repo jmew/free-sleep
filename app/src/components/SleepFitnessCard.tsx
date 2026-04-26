@@ -63,7 +63,9 @@ function ArcGauge({ score, color }: { score: number; color: string }) {
   const VB_H = outerR + PAD_TOP + PAD_BOT;
   const cx = VB_W / 2;
   const cy = VB_H - PAD_BOT; // bottom-center of the semicircle
-  const numberY = cy - outerR * 0.5;
+  // Score text uses the default alphabetic baseline; for digits with no
+  // descenders the baseline IS the visible bottom, so setting y = cy makes
+  // the text bottom align flush with the arc's leg endpoints.
 
   return (
     <Box sx={ { display: 'flex', justifyContent: 'center', width: '100%' } }>
@@ -92,12 +94,11 @@ function ArcGauge({ score, color }: { score: number; color: string }) {
           );
         }) }
         <text
-          x={ cx } y={ numberY }
+          x={ cx } y={ cy }
           fill={ palette.text.primary }
           fontSize={ 44 }
           fontWeight={ 300 }
           textAnchor="middle"
-          dominantBaseline="middle"
           fontFamily="inherit"
           style={ { letterSpacing: '-0.03em' } }
         >

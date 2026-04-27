@@ -267,6 +267,163 @@ sh /home/dac/free-sleep/scripts/block_internet_access.sh
 sh /home/dac/free-sleep/scripts/unblock_internet_access.sh
 ```
 
+The block script's allowlist already includes Tailscale-friendly rules (the `tailscale0` interface, outbound UDP for WireGuard peers + STUN, TCP/443 for the Tailscale control plane + DERP relays, and DNS), so step 20 below works alongside the firewall.
+
+---
+
+## 20. (Optional) Remote access from outside your home network — Tailscale
+
+By default the free-sleep web UI is only reachable from your home Wi-Fi. If you'd like to monitor or control the pod when you're away, **Tailscale** adds the pod to a private WireGuard mesh — you reach it from your phone over an end-to-end-encrypted tunnel, with **no public internet exposure**. Free for personal use (≤100 devices).
+
+The TL;DR is: install the Tailscale daemon on the pod, run `tailscale up` to log in, enable Tailscale Serve in the admin console, and then access the pod at `https://<pod>.<tailnet>.ts.net`.
+
+### 20.1 Install the Tailscale daemon on the pod
+
+If you've already run step 19, temporarily allow internet so the pod can fetch the tarball:
+```bash
+sh /home/dac/free-sleep/scripts/unblock_internet_access.sh
+```
+
+Then on the pod (as root):
+```bash
+# Pre-flight: confirm the kernel exposes /dev/net/tun
+ls -la /dev/net/tun || modprobe tun
+
+# Pick the latest aarch64 build from https://pkgs.tailscale.com/stable/#static
+VERSION=1.96.4
+TARBALL=tailscale_${VERSION}_arm64.tgz
+cd /tmp
+curl -fLO "https://pkgs.tailscale.com/stable/${TARBALL}"
+curl -fsSL "https://pkgs.tailscale.com/stable/${TARBALL}.sha256" -o "${TARBALL}.sha256"
+[ "$(awk '{print $1}' "${TARBALL}.sha256")" = "$(sha256sum "${TARBALL}" | awk '{print $1}')" ] \
+  && echo OK || { echo CHECKSUM_MISMATCH; exit 1; }
+
+# Install: binaries on rootfs, daemon state on the persistent partition (so
+# the tailnet identity survives any future firmware events)
+mkdir -p /opt/tailscale /persistent/tailscale-state
+chmod 0700 /persistent/tailscale-state
+tar -C /opt/tailscale --strip-components=1 -xzf "${TARBALL}"
+ln -sf /opt/tailscale/tailscale  /usr/sbin/tailscale
+ln -sf /opt/tailscale/tailscaled /usr/sbin/tailscaled
+rm "${TARBALL}" "${TARBALL}.sha256"
+
+# Default env file
+cat > /etc/default/tailscaled <<'EOF'
+PORT="41641"
+FLAGS=""
+EOF
+
+# systemd unit. NOTE: `--statedir` is required separately from `--state`
+# when using a custom state path — without it, Tailscale's TLS cert
+# subsystem fails with "no TailscaleVarRoot" and HTTPS won't work.
+cat > /etc/systemd/system/tailscaled.service <<'EOF'
+[Unit]
+Description=Tailscale node agent
+Documentation=https://tailscale.com/docs/
+Wants=network-pre.target
+After=network-pre.target NetworkManager.service systemd-resolved.service
+
+[Service]
+EnvironmentFile=/etc/default/tailscaled
+ExecStart=/opt/tailscale/tailscaled --statedir=/persistent/tailscale-state --state=/persistent/tailscale-state/tailscaled.state --socket=/run/tailscale/tailscaled.sock --port=${PORT} $FLAGS
+ExecStopPost=/opt/tailscale/tailscaled --cleanup
+Restart=on-failure
+RuntimeDirectory=tailscale
+RuntimeDirectoryMode=0755
+CacheDirectory=tailscale
+CacheDirectoryMode=0750
+Type=notify
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now tailscaled
+systemctl status tailscaled   # expect: Active: running, "Needs login:"
+```
+
+### 20.2 Log the pod in to your tailnet
+
+```bash
+tailscale up --hostname=eight-pod --accept-routes=false --advertise-exit-node=false
+```
+
+Open the printed `https://login.tailscale.com/a/...` URL in any browser. If this is your first device, you'll create a free Tailscale account (sign in with Google / GitHub / Microsoft / email). Approve the device. Back on the pod:
+
+```bash
+tailscale status     # should show eight-pod with a 100.x.y.z address
+```
+
+### 20.3 Enable Tailscale Serve + HTTPS in the admin console
+
+Two clicks in the Tailscale admin console (free, both required so we can reach the pod at a clean `https://eight-pod.<tailnet>.ts.net` URL — no port number, real Let's Encrypt cert):
+
+1. **Enable HTTPS / MagicDNS certs**: <https://login.tailscale.com/admin/dns> → "HTTPS Certificates" → **Enable HTTPS**.
+2. **Enable Serve**: visit `https://login.tailscale.com/f/serve` (or follow the link tailscaled prints when you run the next command).
+
+Then on the pod:
+```bash
+tailscale serve --bg --https=443 http://127.0.0.1:3000
+tailscale serve status   # expect: https://eight-pod.<tailnet>.ts.net | -- / proxy http://127.0.0.1:3000
+```
+
+The first browser hit will trigger a Let's Encrypt cert via DNS-01. **If the very first request fails with an ACME error, just retry once — the ACME account registration takes a few seconds to propagate and the second attempt succeeds.**
+
+Get your full FQDN (you'll need it in step 20.4):
+```bash
+tailscale status --json | grep DNSName
+# e.g. eight-pod.tail8d5df2.ts.net
+```
+
+### 20.4 Tell free-sleep to accept the Tailscale origin (CORS)
+
+Free-sleep's CORS allowlist defaults to LAN origins (`http://192.168.*`, etc.) and rejects requests from your tailnet hostname, which would render the UI as a blank page (HTML loads, every API call 500s). Add the Tailscale FQDN as `ALLOWED_ORIGIN`:
+
+```bash
+# Replace with the FQDN from step 20.3
+TS_HOST="eight-pod.tail8d5df2.ts.net"
+sed -i "/^Environment=NODE_ENV=production/a Environment=ALLOWED_ORIGIN=https://${TS_HOST}" /etc/systemd/system/free-sleep.service
+systemctl daemon-reload
+systemctl restart free-sleep
+```
+
+### 20.5 Re-apply the firewall
+
+The repo's `block_internet_access.sh` already includes the rules Tailscale needs, so you can re-block:
+
+```bash
+sh /home/dac/free-sleep/scripts/block_internet_access.sh
+```
+
+Tailscale-related rules added (visible via `iptables -L OUTPUT -n -v`):
+- `tailscale0` interface in/out (the actual VPN payload to your phone)
+- Outbound UDP everywhere (WireGuard direct peer connections + STUN)
+- Outbound TCP/443 (Tailscale control plane + DERP relays)
+- Outbound DNS (UDP+TCP/53)
+
+> **Note:** allowing outbound TCP/443 broadly means Eight Sleep's API endpoints can technically be reached over HTTPS. The OTA-related services were already masked at the systemd level in step 11 — that mask is the actual mechanism that prevents forced firmware updates. The firewall is a second layer.
+
+### 20.6 Use the pod from your phone
+
+1. Install Tailscale ([App Store](https://apps.apple.com/us/app/tailscale/id1470499037) / [Play Store](https://play.google.com/store/apps/details?id=com.tailscale.ipn)), sign in to the same account.
+2. Open `https://eight-pod.<tailnet>.ts.net` in the phone browser.
+3. Tap the share icon → **Add to Home Screen** so free-sleep installs as a PWA icon (chromeless, app-like).
+4. **Leave Tailscale on always.** WireGuard's overhead is negligible. Because the pod was added with `--accept-routes=false`, only traffic to `*.ts.net` hostnames goes over the VPN — your normal phone internet stays on cellular/Wi-Fi unaffected. iOS Tailscale also has "VPN On Demand" rules in Settings if you'd rather have it auto-enable per-domain.
+
+### 20.7 Verify
+
+From a device **not** on your home Wi-Fi (turn off the phone's Wi-Fi to force cellular):
+- `https://eight-pod.<tailnet>.ts.net` should load free-sleep with live data streaming via the WebSocket.
+- From the pod (`ssh -p 8822 root@<POD_IP>`): `tailscale status` should list both the pod and your phone with a `direct` (best, UDP hole-punched) or `derp` (relayed) connection.
+
+Reboot test (proves persistence):
+```bash
+ssh -p 8822 root@<POD_IP> reboot
+# wait ~60s, then re-test from your phone — UI should load without re-auth.
+```
+
+---
 
 #### Free sleep commands available (run this in the terminal through an SSH session on your pod)
 - `fs-debug` - Prints a debug report  for the pod & free sleep

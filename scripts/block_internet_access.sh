@@ -71,6 +71,32 @@ systemctl restart systemd-timesyncd
 iptables -A INPUT  -i lo -j ACCEPT
 iptables -A OUTPUT -o lo -j ACCEPT
 
+# -----------------------------------------------------------------------------------------------------
+# Allow Tailscale (https://tailscale.com/kb/1082/firewall-ports)
+#
+# Tailscale gives us remote access to the pod from outside the LAN without
+# exposing it to the public internet. Without these rules, the OUTPUT DROP
+# below would block tailscaled from reaching its control plane and DERP relays.
+#
+# (1) Anything on the tailscale interface — the VPN payload between the user's
+#     devices and this pod (e.g., phone browser -> https://eight-pod).
+iptables -A INPUT  -i tailscale0 -j ACCEPT
+iptables -A OUTPUT -o tailscale0 -j ACCEPT
+
+# (2) tailscaled needs outbound to talk to peers + Tailscale's control plane:
+#       - UDP everywhere: direct WireGuard peer connections + STUN
+#       - TCP/443: control plane (controlplane.tailscale.com) + DERP relays
+#       - DNS: to resolve controlplane.tailscale.com / derp*.tailscale.com
+#     Note: this allows the pod to reach any HTTPS host, not only Tailscale.
+#     Eight Sleep's OTA updates are blocked at the systemd level (services
+#     masked per INSTALLATION.md) — that's the real mechanism preventing
+#     forced firmware updates; this firewall is a second layer.
+iptables -A OUTPUT -p udp -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT
+iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+# -----------------------------------------------------------------------------------------------------
+
 # Block everything else
 iptables -A INPUT -j DROP
 iptables -A OUTPUT -j DROP

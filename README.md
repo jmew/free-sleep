@@ -59,6 +59,7 @@ That said, you can fully reset the firmware and return the Pod to its original s
   - Alarms - If you turn off the Pod prior to the alarm running, then the alarm will not run
 - Settings customization: Configure timezones, away mode, brightness of LED on pod
 - Website works on desktop and mobile
+- Optional remote access from outside your home network via [Tailscale](https://tailscale.com) — encrypted, no public exposure of the pod, free for personal use. See [INSTALLATION.md step 20](INSTALLATION.md) for setup.
 
 
 ### Biometrics 📈

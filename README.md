@@ -52,13 +52,16 @@ That said, you can fully reset the firmware and return the Pod to its original s
 - Allows complete control of device WITHOUT requiring internet access. If you lose internet, your pod WILL NOT turn off, it will continue working! You can completely block WAN internet access if you'd like too. (I blocked all internet access from my pod on my router...)
 - WARNING: This will bypass blocked devices, please use responsibly
 - Dynamic temperature control with real-time updates
-- Schedule management: 
-  - Set power on/off times 
+- Schedule management:
+  - Set power on/off times
   - Schedule temperature adjustments
   - Schedule daily time to prime the pod
-  - Alarms - If you turn off the Pod prior to the alarm running, then the alarm will not run
+  - Alarms — vibration patterns, configurable intensity/duration; auto-skipped if the pod was turned off before the scheduled time
+- Sleep tracking & biometrics dashboard: heart rate, HRV, breathing rate, movement, sleep stages, sleep score, sleep consistency
+- Adjustable base control (Pod 4+): position presets, manual head/foot control, stop command
+- Real-time UI updates over WebSocket (`/ws/events`) — temperature changes, schedule events, and service-health flips arrive instantly without polling
 - Settings customization: Configure timezones, away mode, brightness of LED on pod
-- Website works on desktop and mobile
+- Website works on desktop and mobile (PWA-installable)
 - Optional remote access from outside your home network via [Tailscale](https://tailscale.com) — encrypted, no public exposure of the pod, free for personal use. See [INSTALLATION.md step 20](INSTALLATION.md) for setup.
 
 
@@ -101,9 +104,12 @@ Vitals are inserted once every 60 seconds & you can access the raw data @ <POD_I
 ---
 
 ## Tech Stack
-- **Server**: Node.js, Express, TypeScript.
-- **App**: React, Material-UI, Zustand, React Query.
-- **Database**: LowDB for simple JSON-based storage.
+- **Server**: Node.js, Express, TypeScript, native `ws` for the real-time channel.
+- **App**: React, Material-UI, Zustand, React Query, Vite.
+- **Database**:
+  - **LowDB** (JSON files in `/persistent/free-sleep-data/lowdb/`) for schedules, settings, server-side state.
+  - **SQLite via Prisma** (`/persistent/free-sleep-data/free-sleep.db`) for biometric time-series — vitals, movement, sleep records.
+- **Biometrics pipeline**: Python service (`free-sleep-stream.service`) that reads `/persistent/*.RAW` piezo/capacitance data, computes presence + heart rate / HRV / breathing rate, writes to SQLite.
 
 ## Contributing
 - Read [contributing docs](CONTRIBUTING.md) 

@@ -236,6 +236,102 @@ The server exposes RESTful endpoints for interaction. All responses are JSON unl
 
 ---
 
+## `/api/alarm`
+
+### POST
+
+- Triggers the bed-vibration alarm immediately, independent of any schedule. Useful for testing alarm patterns/intensities from the UI.
+
+#### Request Body
+
+Same shape as the `alarm` field in `/api/schedules` (validated by `AlarmJobSchema`).
+
+```json
+{
+  "side": "left",
+  "vibrationIntensity": 1,
+  "vibrationPattern": "rise",
+  "duration": 10,
+  "alarmTemperature": 78
+}
+```
+
+#### Response
+
+Returns the current schedules DB.
+
+---
+
+## `/api/base-control`  (Pod 4+)
+
+Adjustable-base position control. Talks to the base over BLE; position state is mirrored in `memoryDB.baseStatus`.
+
+### GET `/api/base-control`
+
+Current base status.
+
+```json
+{
+  "head": 30,
+  "feet": 0,
+  "isMoving": false,
+  "lastUpdate": "2026-04-26T10:12:34Z",
+  "isConfigured": true
+}
+```
+
+### POST `/api/base-control`
+
+Move base to an absolute position.
+
+#### Request Body
+
+| Field | Range | Required | Default |
+|---|---|---|---|
+| `head`     | 0–60 (degrees) | yes | — |
+| `feet`     | 0–45 (degrees) | yes | — |
+| `feedRate` | 30–100         | no  | 50  |
+
+```json
+{ "head": 25, "feet": 10, "feedRate": 50 }
+```
+
+### POST `/api/base-control/preset`
+
+Move to a named preset defined in `8sleep/basePresets.ts` (e.g. `flat`, `read`, `tv`, `zeroG`).
+
+```json
+{ "preset": "zeroG" }
+```
+
+### POST `/api/base-control/stop`
+
+Emergency-stop any in-progress base movement.
+
+---
+
+## `/api/jobs`
+
+### POST
+
+- Manually run one or more scheduled jobs on demand. Useful from the UI when, e.g., a sleep analysis didn't fire automatically.
+
+#### Request Body
+
+Array of job keys:
+
+```json
+["analyzeSleepLeft", "analyzeSleepRight"]
+```
+
+Valid keys:
+- `analyzeSleepLeft` / `analyzeSleepRight` — re-run sleep detection over the last 12 hours.
+- `biometricsCalibrationLeft` / `biometricsCalibrationRight` — recalibrate cap-sensor presence thresholds over the last 2 hours.
+- `reboot` — schedule a reboot.
+- `update` — run the update script.
+
+---
+
 ## `/api/metrics/sleep`
 
 ### GET
@@ -268,6 +364,14 @@ The server exposes RESTful endpoints for interaction. All responses are JSON unl
   }
 ]
 ```
+
+### PUT `/api/metrics/sleep`
+
+- Edits an existing sleep record (e.g., correct a bedtime that was off because of a presence-detection glitch). Body specifies the record id and the fields to overwrite.
+
+### DELETE `/api/metrics/sleep/:id`
+
+- Removes a sleep record. Useful for naps or false detections that should not count.
 
 ---
 
@@ -325,6 +429,79 @@ The server exposes RESTful endpoints for interaction. All responses are JSON unl
   "maxHeartRate": 80,
   "avgHRV": 52,
   "avgBreathingRate": 17
+}
+```
+
+---
+
+## `/api/metrics/movement`
+
+### GET
+
+- Per-bucket movement records derived from piezo data. Used to render the "movement" chart and as input to the sleep-stage classifier (high-movement epochs are flagged as `awake`).
+- Query parameters: `side`, `startTime`, `endTime` (all optional, ISO 8601).
+
+#### Response
+
+```json
+[
+  { "id": 1, "side": "left", "timestamp": "2025-02-15T22:05:00Z", "total_movement": 312 },
+  { "id": 2, "side": "left", "timestamp": "2025-02-15T22:10:00Z", "total_movement": 87 }
+]
+```
+
+---
+
+## `/api/metrics/sleep-stages`
+
+### GET
+
+- Per-epoch sleep-stage classification (awake / REM / light / deep) for a side over a time range. Heuristic classifier — no ML — built from the per-5-min `vitals` and `movement` rows. See [biometrics/BIOMETRICS.md](../biometrics/BIOMETRICS.md) for the algorithm.
+- Required query parameters: `side`, `startTime`, `endTime`.
+
+#### Response
+
+```json
+{
+  "epochs": [
+    { "startUnix": 1739659200, "endUnix": 1739659500, "stage": "deep" },
+    { "startUnix": 1739659500, "endUnix": 1739659800, "stage": "rem" }
+  ],
+  "totals":      { "awake": 0,    "rem": 5400, "light": 12000, "deep": 5100 },
+  "percentages": { "awake": 0,    "rem": 24,   "light": 53,    "deep": 23 },
+  "totalSeconds": 22500
+}
+```
+
+---
+
+## `/api/metrics/sleep-score`
+
+### GET
+
+- Returns an aggregate sleep score for a given sleep period, broken down into component contributions (duration, stage balance, consistency, etc.).
+- Query parameters: `side`, `startTime`, `endTime`.
+
+---
+
+## `/api/metrics/server`
+
+### GET
+
+- In-process server metrics, intended for local debugging on the Pod (`curl localhost:3000/api/metrics/server`).
+
+#### Response (shape; values are point-in-time)
+
+```json
+{
+  "franken": {
+    "queueDepth": 0,
+    "commandLatencyMs": { "p50": 18, "p95": 47, "count": 8231 },
+    "timeouts": 0
+  },
+  "ws": { "clients": 1 },
+  "jobs": { "alarm": { "ok": 4, "failed": 0 }, "temperature": { "ok": 28, "failed": 0 } },
+  "process": { "uptimeSeconds": 7521, "rssMb": 93 }
 }
 ```
 
@@ -415,10 +592,11 @@ The POST endpoints (`/api/deviceStatus`, `/api/settings`, `/api/schedules`) supp
 --- 
 
 ## /api/metrics/presence
+
 ### GET
 
 - Tracks whether someone is present on the left and/or right side.
-Stored in-memory (resets on server restart). 
+Stored in-memory (resets on server restart).
 Timestamps are server-generated.
 
 #### Response
@@ -435,6 +613,32 @@ Timestamps are server-generated.
   }
 }
 ```
+
+### POST
+
+- Pushed by the Python biometrics service (`biometric_processor.py`) when its presence state flips. Body shape:
+
+```json
+{ "left": { "present": true } }
+```
+
+The server merges the incoming side into its in-memory state and publishes a presence event on the WS bus.
+
+---
+
+## `/api/logs`
+
+### GET `/api/logs`
+
+- Lists log files available on the device. Reads from `/persistent/free-sleep-data/logs` and `/var/log`. Newest first.
+
+```json
+{ "logs": ["free-sleep-stream.log", "free-sleep.log", "sleep-analyzer.log"] }
+```
+
+### GET `/api/logs/:filename`
+
+- Streams the named log file to the client as a `text/event-stream` (SSE), tailing as new lines arrive. Used by the in-app log viewer.
 
 ---
 
@@ -558,4 +762,44 @@ Timestamps are server-generated.
   }
 }
 ```
+
+---
+
+## WebSocket — `/ws/events`
+
+Real-time push channel. Replaces the React app's prior 5-second deviceStatus polling. Connect with a normal browser `WebSocket` — no auth, no library required.
+
+```
+ws://<POD_IP>:3000/ws/events
+```
+
+### Frame format
+
+Every frame is a JSON envelope:
+
+```json
+{ "channel": "device-status", "payload": { /* ... */ }, "ts": 1745704351342 }
+```
+
+### Channels
+
+| Channel | When it fires | Payload |
+|---|---|---|
+| `device-status`  | `FrankenMonitor` diffs the last DeviceStatus snapshot and emits only when something actually changed (temperature, isOn, water level, etc.) | Full `DeviceStatus` object — same shape as `GET /api/deviceStatus` |
+| `service-health` | A check in `/api/serverStatus` flips between `healthy` ↔ `failed` | Partial server-status patch — only the fields that changed |
+| `job-event`      | A scheduled job starts / succeeds / fails (alarms, temperature changes, prime, analyze-sleep, calibration) | `{ name, status, message?, timestamp }` |
+| `presence`       | Biometrics service pushes a presence flip via `POST /api/metrics/presence` | Same shape as `GET /api/metrics/presence` |
+
+### Heartbeat
+
+The server pings every 15 s and drops sockets that miss two pongs. Clients should not need to do anything — the browser handles pong frames automatically.
+
+### Polling fallback
+
+The React app's `eventStream.ts` reconnects with exponential backoff up to 30 s. While disconnected, the existing React Query hooks fall back to their normal 30–60 s HTTP polling so the UI never goes fully stale.
+
+### Adaptive polling on the server
+
+`FrankenMonitor` runs at 2 s intervals while ≥1 WS client is connected, 10 s when idle. Saves dac.sock churn when no one is looking. (Pod 4+ only — Pod 3's slower path was removed.)
+
 

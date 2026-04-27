@@ -36,12 +36,28 @@ The server is composed of the following key components:
 - Manages graceful shutdown processes for reliability.
 
 ### 2. **Routes:**
+
+Device control:
 - **`/api/deviceStatus`:** Fetches and updates the status of the device.
-- **`/api/settings`:** Manages device settings (e.g., timezone, away mode, priming schedules).
-- **`/api/schedules`:** Handles scheduling for device operations.
-- **`/api/execute`:** Sends commands directly to the device.
-- **`/api/metrics/vitals`:** Biometrics (heart rate, HRV, breathing rate)
-- **`/api/metrics/sleep`:** Sleep intervals
+- **`/api/settings`:** Manages device settings (timezone, away mode, priming schedules, temperature format, daily reboot).
+- **`/api/schedules`:** Daily schedules for power on/off, temperature, and alarms.
+- **`/api/execute`:** Sends raw franken commands directly to the device (`SET_TEMP`, `PRIME`, etc.). See [API.md](./API.md).
+- **`/api/alarm`:** Trigger / dismiss the bed-vibration alarm.
+- **`/api/base-control`:** Adjustable-base position control (Pod 4+): get state, set head/foot %, run preset, stop.
+- **`/api/jobs`:** Manually run a scheduled job (e.g. analyze-sleep) on demand.
+
+Biometrics & sleep data:
+- **`/api/metrics/vitals`** + **`/api/metrics/vitals/summary`:** Heart rate, HRV, breathing rate (raw rows + summary stats).
+- **`/api/metrics/movement`:** Bed-movement records derived from piezo data.
+- **`/api/metrics/sleep`:** Sleep records (entered_bed_at / left_bed_at / present_intervals); supports GET, PUT (edit), DELETE.
+- **`/api/metrics/sleep-stages`:** Per-epoch sleep-stage classification (awake / REM / light / deep).
+- **`/api/metrics/sleep-score`:** Aggregate score for a given sleep period.
+- **`/api/metrics/presence`:** Real-time presence flags per side (in-memory; updated by the biometrics service).
+
+Operations & introspection:
+- **`/api/serverStatus`:** Health snapshot of every service (express, jobs, franken socket, biometrics, etc.).
+- **`/api/services`:** Toggle and inspect service state (e.g., enable/disable biometrics, sentry).
+- **`/api/logs`** + **`/api/logs/:filename`:** List log files and stream content via SSE.
 - **`/api/metrics/server`:** In-process metrics — Franken command latency p50/p95,
   timeout count, queue depth, WS client count, job exec counts, memory/uptime.
   Read-only JSON; useful for debugging on the pod (`curl localhost:3000/api/metrics/server`).
@@ -75,9 +91,15 @@ The server is composed of the following key components:
 
 
 ### 6. **Database (`src/db/`):**
-- The JSON files are created the first time the server runs, you do not need to create them
-- Uses `lowdb` for simple JSON-based storage.
-- Includes schemas for schedules, settings, and time zones, validated with `zod`.
+Hybrid setup — different storage backends for different data shapes:
+- **LowDB (JSON files at `/persistent/free-sleep-data/lowdb/`)** for low-volume config data:
+  - `schedulesDB.json` — daily schedules (power, temperature, alarms)
+  - `settingsDB.json` — timezone, away mode, prime time, etc.
+  - Schemas validated with `zod`. Files are created on first run; you do not need to create them.
+- **SQLite via Prisma (`/persistent/free-sleep-data/free-sleep.db`)** for biometric time-series:
+  - Tables: `vitals`, `movement`, `sleep_records` (schema in `prisma/schema.prisma`).
+  - Migrations in `prisma/migrations/` are applied on server startup.
+  - Read paths: `loadVitalsRecords.ts`, `loadMovementRecords.ts`, `loadSleepRecords.ts`.
 
 
 ### 7. **8 Sleep Integration (`src/8sleep/`):**
@@ -123,18 +145,28 @@ The server is composed of the following key components:
 ## File Structure
 ```
 server/
-├── free-sleep-data/        # For local development - mimics the /persistent/free-sleep-data/ folder on Pod
+├── free-sleep-data/        # Local-dev mirror of /persistent/free-sleep-data/ on the Pod
+├── prisma/
+│   ├── schema.prisma       # SQLite schema for vitals, movement, sleep_records
+│   └── migrations/         # Auto-applied on server start
 ├── src/
-│   ├── 8sleep/             # Integration with the "Franken" device
-│   ├── db/                 # JSON database and schemas
-│   ├── jobs/               # Job scheduling utilities
+│   ├── 8sleep/             # Franken socket client (dac.sock), command queue, monitor
+│   ├── db/                 # LowDB stores + Prisma client + read helpers
+│   ├── events/             # In-process eventBus (DeviceStatus / serverStatus / job events)
+│   ├── jobs/               # node-schedule jobs + jobEvents emitter
+│   ├── metrics/            # In-process metrics (latency histograms, queue depth, WS clients)
+│   ├── routes/             # Express routes (one folder per resource group)
+│   │   ├── alarm/  baseControl/  deviceStatus/  execute/  jobs/  logs/
+│   │   ├── metrics/        # vitals, movement, sleep, sleepStages, sleepScore, presence
+│   │   ├── metricsServer/  # /api/metrics/server
+│   │   ├── schedules/  serverStatus/  services/  settings/
+│   ├── ws/                 # WebSocket server (heartbeat + eventBus → clients)
+│   ├── setup/              # Middleware + route registration
 │   ├── logger.ts           # Logging configuration
-│   ├── routes/             # API routes
-│   ├── setup/              # Middleware and routes setup
 │   ├── server.ts           # Core server entry point
 ├── dist/                   # Compiled output (generated by TypeScript)
-├── tsconfig.json           
-├── package.json            
+├── tsconfig.json
+├── package.json
 ```
 
 ---

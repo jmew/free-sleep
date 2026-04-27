@@ -17,10 +17,13 @@ The app uses Material-UI for styling and layout, Zustand for state management, a
 ## Key Features
 - **Dynamic Temperature Control**: Adjust temperature settings with a circular slider.
 - **Scheduling**: Set and manage daily temperature schedules with power on/off times and temperature adjustments.
-- **Settings Management**: Update timezone, enable/disable away mode, and configure daily priming.
+- **Alarms**: Per-day alarm configuration with vibration intensity, pattern, and duration.
+- **Adjustable base control** (Pod 4+): manual head/foot positioning and presets.
+- **Sleep dashboard**: per-night sleep stages chart, heart rate / breathing rate / HRV trends, sleep score, sleep consistency.
+- **Settings Management**: Update timezone, temperature units, away mode, daily priming, daily reboot.
 - **Device Status**: Monitor and update the device's operational status.
 - **Multi-Side Control**: Configure settings for both left and right sides of the device.
-- **Alarms** (Coming soon, work in progress)
+- **Real-time updates**: WebSocket client (`api/eventStream.ts`) consumes `/ws/events` and pushes deviceStatus / serverStatus / job-event changes into React Query's cache, so the UI reflects pod state without polling.
 ---
 
 ## Directory Structure
@@ -32,37 +35,43 @@ The app uses Material-UI for styling and layout, Zustand for state management, a
 ### **State Management**
 - `appStore.tsx`: Global state using Zustand for tracking UI updates, selected side, and fetching status.
 
-### **API**
-- `api/`: Contains methods for communicating with backend endpoints.
-    - `deviceStatus.ts`: Get/update device status.
-    - `schedules.ts`: Get/update schedules.
-    - `settings.ts`: Get/update settings.
-    - `timeZones.ts`: List of supported timezones.
-    - Shared schemas using Zod for validation
+### **API (`src/api/`)**
+React Query hooks + Axios client + Zod schemas. One file per resource group:
+- `deviceStatus.ts`, `settings.ts`, `schedules.ts`, `alarm.ts`, `baseControl.ts`, `jobs.ts`, `logs.ts`
+- `services.ts`, `serverStatus.ts`, `serverInfo.ts`
+- `vitals.ts`, `movement.ts`, `sleep.ts`, `sleepStages.ts`, `sleepScore.ts`, `presence.ts`
+- `timeZones.ts` — static timezone list
+- `eventStream.ts` — WebSocket subscription that updates React Query caches in place
+- `*Schema.ts` — shared Zod schemas (`schedulesSchema`, `settingsSchema`, `serverStatusSchema`, etc.)
+- `api.ts` — Axios setup; respects `VITE_POD_IP` for dev mode
 
 ### **Components**
 - `Layout`: Main application layout with a navbar and routed content.
 - `Navbar`: Provides navigation for different app sections with responsive support.
 - `PageContainer`: Standardized container for page content.
+- Charts: `VitalsLineChart`, `SleepStagesCard`, `SleepFitnessCard`, `SleepConsistencyCard`, `SleepBalanceCard`, `VitalsSummaryCard`.
 
-### **Pages**
-- **ControlTempPage**: Manage real-time temperature adjustments.
-    - Includes slider, power button, and away mode notifications.
-- **SettingsPage**: Configure timezone, away mode, and daily priming.
-- **SchedulePage**: View and edit daily schedules with features like applying settings to multiple days.
+### **Pages (`src/pages/`)**
+- **ControlTempPage**: Real-time temperature adjustments (slider, power button, away-mode notifications).
+- **SchedulePage**: Daily schedules — power, temperature, alarms — with multi-day apply.
+- **SettingsPage**: Timezone, units, away mode, daily priming, daily reboot, brightness, alarm test, license/about.
+- **BaseControlPage**: Adjustable-base position (Pod 4+).
+- **DataPage** (and `DataPage/SleepPage`): Sleep dashboard — week strip, sleep stages, vitals charts, sleep score / consistency.
+- **StatusPage**: Service health overview using `/api/serverStatus`.
 
 ---
 
 ## State Management
 The app uses:
-1. **Zustand**: For local state management, such as UI updates and active side selection.
-2. **React Query**: For fetching and caching API data, with features like automatic refetching and retries.
+1. **Zustand**: For local state management (selected side, UI toggles).
+2. **React Query**: For fetching and caching API data — with automatic retries, refetch on focus, and live updates via `eventStream.ts`.
 
 ---
 
 ## API Integration
 - **React Query** is used for seamless API interactions with optimistic updates and error handling.
-- Axios provides the underlying HTTP client setup in `api/api.ts`.
+- **WebSocket** (`/ws/events`) is the realtime path: `eventStream.ts` connects on app start, auto-reconnects with exponential backoff up to 30s, and falls back to React Query's polling while disconnected.
+- **Axios** provides the underlying HTTP client setup in `api/api.ts`.
 
 --- 
 

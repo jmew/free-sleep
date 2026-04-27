@@ -77,8 +77,11 @@
 
 ### 2. Piezo sensor data
 
-- This measures pressure 500x a second
-- Pod 3 has 2 piezo sensors, Pod 4 has 1 piezo sensor
+- Measures pressure ~500× per second.
+- Sensor count per side varies by hardware:
+  - **Pod 3**: 2 piezos per side (head + foot). Records contain `left1`, `left2`, `right1`, `right2`.
+  - **Pod 4 / Pod 5 / Pod 8**: 1 piezo per side. Records contain only `left1` and `right1`.
+- `StreamProcessor` auto-detects which case it's in: `sensor_count = 2 if 'left2' in piezo_record else 1`. The dual-piezo presence-detection code (`max(range(signal1), range(signal2))`) is a no-op on single-piezo hardware.
 
 ```json
 {
@@ -110,6 +113,23 @@
   "type": "piezo-dual"
 }
 ```
+
+---
+
+## Presence detection notes
+
+`biometric_processor.detect_presence()` decides per-second whether someone is on a given side:
+
+1. Compute the percentile-based range (p98 − p2) of each piezo signal, then take the max of available piezos.
+2. Cross-side `_PresenceCoordinator` arbitrates between left and right based on a dominance ratio (1.3×) and a noise floor (100,000) so mechanical transmission through the mattress doesn't read as occupancy on the empty side.
+3. Hysteresis: 3 consecutive "elevated" readings flip presence to true; **180 seconds** of "not elevated" before flipping back to false. The long timeout exists because piezos are AC-coupled — a perfectly still sleeper produces only tiny breathing-amplitude signal that can fall below threshold for a minute or more.
+4. On reset (the 180s timeout firing), all rolling buffers are wiped via `init_tracking()`. After re-detection, vitals only resume once `present_for > heart_rate_window_seconds` again.
+
+Tunable in `biometric_processor.py`:
+- `no_presence_tolerance` (line ~179): 180s default.
+- noise floor + dominance ratio in `_PresenceCoordinator`.
+
+If a deep sleeper shows up with multi-hour vitals gaps on the chart, the typical cause is repeated sub-threshold stillness re-triggering the timeout. Increase tolerance or lower the noise floor for that user.
 
 
 

@@ -3,7 +3,6 @@ import AccessTime from '@mui/icons-material/AccessTime';
 import BoltIcon from '@mui/icons-material/Bolt';
 import { useTheme } from '@mui/material/styles';
 
-import GlassCard from '@design/GlassCard';
 import { palette } from '@design/tokens';
 import { useAppStore } from '@state/appStore.tsx';
 import { useScheduleStore } from './scheduleStore.tsx';
@@ -39,7 +38,7 @@ export default function PowerScheduleSection({ displayCelsius }: Props) {
   const tempLabel = formatTemperature(onTemperatureValue, displayCelsius);
 
   return (
-    <GlassCard sx={ { opacity: !selectedSchedule?.power.enabled ? 0.55 : 1, transition: 'opacity 0.15s' } }>
+    <>
       <Box sx={ { display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 } }>
         <Box sx={ { display: 'flex', alignItems: 'center', gap: 1.25 } }>
           <BoltIcon sx={ { color: palette.text.primary } } />
@@ -134,6 +133,6 @@ export default function PowerScheduleSection({ displayCelsius }: Props) {
           } }
         />
       </Box>
-    </GlassCard>
+    </>
   );
 }

@@ -73,7 +73,7 @@ function ArcGauge({ score, color }: { score: number; color: string }) {
         viewBox={ `0 0 ${VB_W} ${VB_H}` }
         // height capped so the rendered card stays compact; width follows
         // the viewBox aspect (so the arc remains a true circle, not stretched).
-        style={ { display: 'block', height: 200, width: 'auto', maxWidth: '100%' } }
+        style={ { display: 'block', height: 160, width: 'auto', maxWidth: '100%' } }
       >
         { Array.from({ length: TICKS }).map((_, i) => {
           const angle = 180 - (i / (TICKS - 1)) * 180;

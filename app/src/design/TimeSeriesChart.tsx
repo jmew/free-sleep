@@ -60,13 +60,13 @@ export default function TimeSeriesChart({
         <Box
           sx={ {
             position: 'absolute',
-            // The chart has a left margin (~50px) and bottom margin (~40px) for
-            // axis labels — we approximate the plot area position here. Not
-            // pixel-perfect; the chart will overlay this box.
+            // The chart has a left margin (~38px) for axis labels and a bottom
+            // margin (~32px) for x-axis labels — approximate the plot area
+            // position here. Not pixel-perfect; the chart overlays this box.
             top: 12,
             bottom: 40,
-            left: 8,
-            right: 62,
+            left: 38,
+            right: 12,
             pointerEvents: 'none',
             // Vertical position within the plot area is computed by mapping
             // the target range to a percentage of [padded[0], padded[1]].
@@ -88,7 +88,13 @@ export default function TimeSeriesChart({
       <LineChart
         width={ width }
         height={ height }
-        margin={ { top: 12, bottom: 32, left: 8, right: 56 } }
+        // Left margin = room for y-axis labels (up to 3 digits like "100").
+        // Previous config put labels on the right with position:'right' and
+        // a 56px right margin, but MUI x-charts didn't honor that on every
+        // build of the lib — labels rendered at x=0 and got clipped to just
+        // the trailing digit (e.g. "60" → "0"). Putting them back on the
+        // left with explicit margin is the boring known-good config.
+        margin={ { top: 12, bottom: 32, left: 38, right: 12 } }
         colors={ [lineColor] }
         dataset={ data.map((p) => ({ ...p })) }
         xAxis={ [{
@@ -102,7 +108,7 @@ export default function TimeSeriesChart({
         yAxis={ [{
           min: padded[0],
           max: padded[1],
-          position: 'right',
+          position: 'left',
           valueFormatter: fmtY,
           tickLabelStyle: { fill: palette.text.tertiary, fontSize: 11 },
           stroke: 'transparent',

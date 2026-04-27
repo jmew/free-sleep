@@ -266,6 +266,7 @@ export default function BaseControlPage() {
         bgcolor: '#000',
         color: '#fff',
         minHeight: '100vh',
+        justifyContent: 'flex-start',
       }}
     >
       <Typography

@@ -15,7 +15,6 @@ import _ from 'lodash';
 import moment from 'moment-timezone';
 import { useTheme } from '@mui/material/styles';
 
-import GlassCard from '@design/GlassCard';
 import { palette } from '@design/tokens';
 import { useAppStore } from '@state/appStore.tsx';
 import { useScheduleStore } from './scheduleStore.tsx';
@@ -105,17 +104,19 @@ export default function TemperatureAdjustmentsSection({ displayCelsius }: Props)
     : [];
 
   return (
-    <GlassCard sx={ { opacity: disabled ? 0.55 : 1, transition: 'opacity 0.15s' } }>
+    <>
       <Box sx={ { display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 } }>
-        <ThermostatIcon sx={ { color: palette.text.primary } } />
+        <ThermostatIcon sx={ { color: palette.text.primary, fontSize: '1.1rem' } } />
         <Typography
           sx={ {
-            fontSize: '1.1rem',
+            fontSize: '0.95rem',
             fontWeight: 600,
-            color: palette.text.primary,
+            color: palette.text.secondary,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
           } }
         >
-          Temperature adjustments
+          Temperature transitions
         </Typography>
       </Box>
 
@@ -197,6 +198,6 @@ export default function TemperatureAdjustmentsSection({ displayCelsius }: Props)
           Add transition
         </Button>
       </Box>
-    </GlassCard>
+    </>
   );
 }

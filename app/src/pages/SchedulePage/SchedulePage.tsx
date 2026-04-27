@@ -1,7 +1,8 @@
 import _ from 'lodash';
 import { useEffect } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Divider, Typography } from '@mui/material';
 
+import GlassCard from '@design/GlassCard';
 import { palette } from '@design/tokens';
 import { DeepPartial } from 'ts-essentials';
 import moment from 'moment-timezone';
@@ -147,8 +148,16 @@ export default function SchedulePage() {
         <TemperatureScheduleChart />
       </ErrorBoundary>
 
-      <PowerScheduleSection displayCelsius={ displayCelsius }/>
-      <TemperatureAdjustmentsSection displayCelsius={ displayCelsius }/>
+      <GlassCard
+        sx={ {
+          opacity: !selectedSchedule?.power.enabled ? 0.55 : 1,
+          transition: 'opacity 0.15s',
+        } }
+      >
+        <PowerScheduleSection displayCelsius={ displayCelsius }/>
+        <Divider sx={ { my: 2.5, borderColor: 'rgba(255,255,255,0.08)' } } />
+        <TemperatureAdjustmentsSection displayCelsius={ displayCelsius }/>
+      </GlassCard>
       <AlarmSection/>
 
       <FloatingSaveBar onSave={ handleSave }/>

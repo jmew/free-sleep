@@ -147,6 +147,12 @@ const App = () => {
                   // a few pixels past 100% can't trigger the iPhone's "1mm horizontal
                   // scroll" bug. (overflow-x:hidden also hides any horiz scrollbar.)
                   overflowX: 'hidden',
+                  // Be explicit about the y-axis. Spec says overflow-y becomes 'auto'
+                  // implicitly when overflow-x is 'hidden', but Android Chrome doesn't
+                  // always honor that — it ends up locking vertical scroll on the
+                  // document. iOS Safari does the right thing either way. Setting
+                  // overflow-y:auto explicitly fixes Android without changing iOS.
+                  overflowY: 'auto',
                   maxWidth: '100vw',
                 },
                 // Hide vertical scrollbars but keep scroll functionality, on every

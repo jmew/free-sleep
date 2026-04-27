@@ -47,19 +47,22 @@ export default defineConfig({
           }
           return '[name]-[hash].[ext]';
         },
-        // Split big vendors so they cache independently across deploys. Order
-        // matters: the more specific check (x-charts/d3) runs before the
-        // catch-all @mui bucket so chart code doesn't accidentally land in
-        // mui-vendor.
+        // Split big vendors so they cache independently across deploys.
+        //
+        // IMPORTANT: keep @mui/material and @mui/x-charts in the SAME chunk.
+        // x-charts internally re-exports from @mui/material, and splitting
+        // them creates a circular import between the two output chunks
+        // (mui-vendor ↔ charts-vendor) which Rollup cannot resolve cleanly:
+        // the browser hits a TDZ "Cannot access 'as' before initialization"
+        // on first load and the whole app fails to mount (white page).
+        // Bundling them together is the simplest fix; the combined chunk is
+        // ~700KB but only loads once and caches forever.
         manualChunks(id: string) {
           if (!id.includes('node_modules')) return undefined;
           if (
-            id.includes('node_modules/@mui/x-charts') ||
-            id.includes('node_modules/d3')
-          ) return 'charts-vendor';
-          if (
             id.includes('node_modules/@mui/') ||
-            id.includes('node_modules/@emotion/')
+            id.includes('node_modules/@emotion/') ||
+            id.includes('node_modules/d3')
           ) return 'mui-vendor';
           if (
             id.includes('node_modules/react/') ||

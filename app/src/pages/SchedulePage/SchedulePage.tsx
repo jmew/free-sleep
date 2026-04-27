@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { useEffect } from 'react';
-import { Box, Divider, Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 
 import GlassCard from '@design/GlassCard';
 import { palette } from '@design/tokens';
@@ -155,7 +155,7 @@ export default function SchedulePage() {
         } }
       >
         <PowerScheduleSection displayCelsius={ displayCelsius }/>
-        <Divider sx={ { my: 2.5, borderColor: 'rgba(255,255,255,0.08)' } } />
+        <Box sx={ { my: 2.5, borderTop: '1px solid rgba(255,255,255,0.08)' } } />
         <TemperatureAdjustmentsSection displayCelsius={ displayCelsius }/>
       </GlassCard>
       <AlarmSection/>

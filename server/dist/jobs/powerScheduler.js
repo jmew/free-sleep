@@ -43,16 +43,32 @@ export const schedulePowerOn = (settingsData, side, day, power) => {
         }
     });
 };
-const scheduleAnalyzeSleep = (dayOfWeekIndex, offHour, offMinute, timeZone, side, day) => {
+// Sleep analysis runs daily per side, decoupled from the power schedule.
+// Previously it was scheduled inside schedulePowerOffAndSleepAnalysis and
+// only fired if `power.enabled` was true — which meant a partner who used
+// the bed but had no temperature schedule (e.g. wife on the right side
+// without an active heating schedule) never had sleep records generated
+// for them, even though the biometrics stream was collecting their data.
+//
+// Now sleep analysis is independent: one daily job per side, gated only
+// by the system-wide `biometrics.enabled` toggle. Fixed default time
+// (10:00 local) — late enough that most users are out of bed and the
+// last 12h of raw data is complete; tweak the constants below if a
+// future user routinely sleeps past 10am.
+const SLEEP_ANALYSIS_HOUR = 10;
+const SLEEP_ANALYSIS_MINUTE = 0;
+export const scheduleSleepAnalysis = (settingsData, side) => {
+    if (settingsData[side].awayMode)
+        return;
+    if (settingsData.timeZone === null)
+        return;
     const dailyRule = new schedule.RecurrenceRule();
-    const adjustedOffMinute = offMinute;
-    dailyRule.dayOfWeek = dayOfWeekIndex;
-    dailyRule.hour = offHour;
-    dailyRule.minute = adjustedOffMinute;
-    dailyRule.tz = timeZone;
-    const time = `${String(offHour).padStart(2, '0')}:${String(adjustedOffMinute).padStart(2, '0')}`;
-    logJob('Scheduling daily sleep analyzer job', side, day, dayOfWeekIndex, time);
-    schedule.scheduleJob(`daily-analyze-sleep-${time}-${side}`, dailyRule, async () => {
+    dailyRule.hour = SLEEP_ANALYSIS_HOUR;
+    dailyRule.minute = SLEEP_ANALYSIS_MINUTE;
+    dailyRule.tz = settingsData.timeZone;
+    const time = `${String(SLEEP_ANALYSIS_HOUR).padStart(2, '0')}:${String(SLEEP_ANALYSIS_MINUTE).padStart(2, '0')}`;
+    logger.debug(`Scheduling daily sleep-analyzer job for ${side} at ${time}`);
+    schedule.scheduleJob(`daily-analyze-sleep-${side}`, dailyRule, async () => {
         await servicesDB.read();
         if (!servicesDB.data.biometrics.enabled) {
             logger.debug('Not executing sleep analyzer job, biometrics is disabled');
@@ -64,18 +80,17 @@ const scheduleAnalyzeSleep = (dayOfWeekIndex, offHour, offMinute, timeZone, side
             const diffMs = now - memoryDB.data[side].analyzeSleep.lastRan;
             const tenMinutesMs = 10 * 60 * 1000;
             if (diffMs <= tenMinutesMs) {
-                logJob('Duplicate job detected, exiting!', side, day, dayOfWeekIndex, time);
+                logger.debug(`Duplicate sleep-analyzer job for ${side}, skipping`);
                 return;
             }
         }
         memoryDB.data[side].analyzeSleep.lastRan = now;
         await memoryDB.write();
-        logJob('Executing daily sleep analyzer job', side, day, dayOfWeekIndex, time);
-        // Subtract a fixed start time
+        logger.info(`Executing daily sleep analyzer job for ${side}`);
         executeAnalyzeSleep(side, moment().subtract(12, 'hours').toISOString(), moment().add(1, 'hours').toISOString());
     });
 };
-export const schedulePowerOffAndSleepAnalysis = (settingsData, side, day, power) => {
+export const schedulePowerOff = (settingsData, side, day, power) => {
     if (!power.enabled)
         return;
     if (settingsData[side].awayMode)
@@ -90,7 +105,6 @@ export const schedulePowerOffAndSleepAnalysis = (settingsData, side, day, power)
     offRule.hour = offHour;
     offRule.minute = offMinute;
     offRule.tz = settingsData.timeZone;
-    scheduleAnalyzeSleep(dayOfWeekIndex, offHour, offMinute, settingsData.timeZone, side, day);
     logJob('Scheduling power off job', side, day, dayOfWeekIndex, time);
     schedule.scheduleJob(`${side}-${day}-${time}-power-off`, offRule, async () => {
         try {

@@ -9,7 +9,7 @@ import serverStatus from '../serverStatus.js';
 import settingsDB from '../db/settings.js';
 import { isSystemDateValid } from './isSystemDateValid.js';
 import { scheduleAlarm, scheduleAlarmOverride, scheduleOneOffAlarm } from './alarmScheduler.js';
-import { schedulePowerOffAndSleepAnalysis, schedulePowerOn } from './powerScheduler.js';
+import { schedulePowerOff, schedulePowerOn, scheduleSleepAnalysis } from './powerScheduler.js';
 import { schedulePrimingRebootAndCalibration } from './primeScheduler.js';
 import { scheduleTemperatures } from './temperatureScheduler.js';
 import eventBus from '../events/eventBus.js';
@@ -37,10 +37,18 @@ async function setupJobs() {
         scheduleAlarmOverride(settingsData, 'right');
         scheduleOneOffAlarm(settingsData, 'left');
         scheduleOneOffAlarm(settingsData, 'right');
+        // Sleep analysis runs daily per side, decoupled from power schedule —
+        // a side that's being measured (biometrics on, person actually using
+        // it) gets sleep records even when no temperature schedule is enabled
+        // for that side. Was previously gated on power.enabled inside the
+        // per-day loop, which silently skipped partners without heating
+        // schedules.
+        scheduleSleepAnalysis(settingsData, 'left');
+        scheduleSleepAnalysis(settingsData, 'right');
         Object.entries(schedulesData).forEach(([side, sideSchedule]) => {
             Object.entries(sideSchedule).forEach(([day, schedule]) => {
                 schedulePowerOn(settingsData, side, day, schedule.power);
-                schedulePowerOffAndSleepAnalysis(settingsData, side, day, schedule.power);
+                schedulePowerOff(settingsData, side, day, schedule.power);
                 scheduleTemperatures(settingsData, side, day, schedule.temperatures);
                 scheduleAlarm(settingsData, side, day, schedule);
             });

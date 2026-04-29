@@ -117,7 +117,10 @@ export default function TimeSeriesChart({
         grid={ { horizontal: true, vertical: true } }
         series={ [{
           dataKey: 'value',
-          showMark: ({ index }) => index % Math.max(1, Math.floor(data.length / 50)) === 0,
+          // Pre-aggregation upstream (VitalsLineChart.bucketAggregate) keeps
+          // `data` at a sensible density, so we don't need a second-stage
+          // every-Nth filter in here anymore. Show a marker per point.
+          showMark: true,
           curve: 'linear',
           valueFormatter: (v) => (v == null ? '' : fmtY(v)),
         }] }
@@ -133,9 +136,9 @@ export default function TimeSeriesChart({
           },
           '& .MuiMarkElement-root': {
             stroke: lineColor,
-            strokeWidth: 1.25,
+            strokeWidth: 1,
             fill: '#000',
-            r: 2.5,
+            r: 1.5,
           },
           '& .MuiChartsLegend-root': { display: 'none' },
         } }

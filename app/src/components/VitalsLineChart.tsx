@@ -30,10 +30,21 @@ const METRIC_CONFIG: Record<
   breathing_rate:{ title: 'BREATHING RATE', primaryLabel: 'TONIGHT', unit: 'brpm', targetRange: [12, 20] },
 };
 
-function downsample<T>(arr: T[], maxPoints: number): T[] {
+// Bucket-aggregate timestamped points: split into ~maxPoints contiguous
+// buckets and emit the mean of each bucket (using the bucket's middle
+// timestamp). Smoother trend than naive every-Nth-point decimation, since
+// it averages out jitter rather than just dropping in-between samples.
+function bucketAggregate(arr: TimeSeriesPoint[], maxPoints: number): TimeSeriesPoint[] {
   if (arr.length <= maxPoints) return arr;
-  const factor = Math.ceil(arr.length / maxPoints);
-  return arr.filter((_, i) => i % factor === 0);
+  const bucketSize = Math.ceil(arr.length / maxPoints);
+  const out: TimeSeriesPoint[] = [];
+  for (let i = 0; i < arr.length; i += bucketSize) {
+    const slice = arr.slice(i, i + bucketSize);
+    const meanValue = slice.reduce((s, p) => s + p.value, 0) / slice.length;
+    const midIdx = Math.floor(slice.length / 2);
+    out.push({ timestamp: slice[midIdx].timestamp, value: meanValue });
+  }
+  return out;
 }
 
 export default function VitalsLineChart({ vitalsRecords, metric, sevenDayAvg }: VitalsLineChartProps) {
@@ -52,7 +63,11 @@ export default function VitalsLineChart({ vitalsRecords, metric, sevenDayAvg }: 
       return { points: [] as TimeSeriesPoint[], primaryValue: '—' };
     }
 
-    const downsampled = downsample(cleaned, 120);
+    // Was decimate-to-120 with another every-Nth filter inside the chart
+    // for visible markers. End result felt cluttered (60–80 dots packed on
+    // the line). Bucket-aggregate to ~50 points = roughly half the visible
+    // density of the previous version, with smoother trend lines.
+    const downsampled = bucketAggregate(cleaned, 50);
     const values = cleaned.map((p) => p.value);
 
     // For "AT REST" on heart rate, show the minimum (resting HR is typically

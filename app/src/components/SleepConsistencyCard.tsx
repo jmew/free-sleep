@@ -143,17 +143,24 @@ export default function SleepConsistencyCard({ weekRecords, weekStart }: Props) 
 
   return (
     <GlassCard>
-      { /* Header stats: ASLEEP avg / AWAKE avg — mirrors the 8 Sleep card. */ }
+      { /* Header stats: WEEKLY AVERAGE asleep / awake. Explicitly labeled
+           "AVG" (was just "ASLEEP" / "AWAKE") because the previous labels
+           read as today's times and clashed with the per-night Bedtime /
+           Wake time on the fitness card right above. They're computed from
+           bed-entry / bed-exit timestamps across the week, not detected
+           sleep windows — so the weekly average will always be slightly
+           earlier (bedtime) and later (waketime) than the fitness card's
+           per-night detected onset/offset. */ }
       <Box sx={ { display: 'flex', gap: { xs: 3, sm: 5 }, mb: 1.5 } }>
         <Box>
           <Typography sx={ { ...typography.sectionLabel, color: palette.text.tertiary, mb: 0.25 } }>
-            ASLEEP
+            AVG ASLEEP
           </Typography>
           <Typography sx={ headerValueSx }>{ formatShiftedHour(avgBed) }</Typography>
         </Box>
         <Box>
           <Typography sx={ { ...typography.sectionLabel, color: palette.text.tertiary, mb: 0.25 } }>
-            AWAKE
+            AVG AWAKE
           </Typography>
           <Typography sx={ headerValueSx }>{ formatShiftedHour(avgWake) }</Typography>
         </Box>

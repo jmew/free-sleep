@@ -186,19 +186,32 @@ function classifyStages(
     }
   }
 
-  // Sleep-offset detection: same idea, walking backwards. Catches "lying in
-  // bed scrolling on phone after the alarm went off".
+  // Sleep-offset detection. The "calm streak walking backward" rule used to
+  // be the same as for onset, but it produced wake times that overshot real
+  // wake by ~1 hour: phone-in-bed periods after waking have HR/movement
+  // patterns very similar to light/REM sleep (low movement, HR a few bpm
+  // above baseline) and the classifier had to call them light/REM. The
+  // calm-streak rule then happily latched onto those short post-wake
+  // sleep-ish bursts and reported wake = end of the latest one.
+  //
+  // Switch to a *sustained main sleep block* rule for offset: walk backward
+  // to find the last run of ≥OFFSET_REQUIRED_SLEEP_BUCKETS consecutive
+  // non-awake epochs (= 50 min of continuous classified sleep). The end
+  // of that block is the real wake time. Brief 4-5-epoch bursts during
+  // phone-in-bed are filtered out because they don't sustain long enough.
+  const OFFSET_REQUIRED_SLEEP_BUCKETS = 10;  // 50 min of continuous sleep
   let offsetIdx = working.length;
-  calmRun = 0;
+  let sleepRun = 0;
   for (let i = working.length - 1; i >= 0; i--) {
-    if (working[i].isCalm) {
-      calmRun++;
-      if (calmRun >= ONSET_REQUIRED_CALM_BUCKETS) {
-        offsetIdx = i + ONSET_REQUIRED_CALM_BUCKETS;
+    if (working[i].stage !== 'awake') {
+      sleepRun++;
+      if (sleepRun >= OFFSET_REQUIRED_SLEEP_BUCKETS) {
+        // First epoch AFTER the sustained sleep block, walking forward.
+        offsetIdx = i + OFFSET_REQUIRED_SLEEP_BUCKETS;
         break;
       }
     } else {
-      calmRun = 0;
+      sleepRun = 0;
     }
   }
 

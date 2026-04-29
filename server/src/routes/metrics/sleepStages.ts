@@ -19,76 +19,170 @@ type Epoch = {
   stage: SleepStage;
 };
 
-// Heuristic per-epoch classifier.
+// Heuristic sleep-stage classifier with three improvements over the original
+// per-epoch version:
 //
-// Inputs available per ~5-min epoch:
-//   - heart_rate (bpm)
-//   - hrv (ms)
-//   - breathing_rate (brpm)
-//   - movement (sum of total_movement in window)
+//   1. Dense epochs covering the FULL requested period — one 5-min epoch per
+//      bucket from periodStart to periodEnd. Buckets without a vitals record
+//      use carry-forward (or movement-only) classification. Fixes the visible
+//      "gaps in the chart" the user reported (vitals coverage was ~58%).
 //
-// Approach (no ML, fully deterministic):
-//   1. Build a baseline = 10th percentile of HR across the night = "deep sleep HR".
-//   2. For each epoch:
-//      • If movement >> typical → AWAKE (sleep interruption)
-//      • Else if HR ≤ baseline + 2 AND breathing ≤ 14 → DEEP (slow & steady)
-//      • Else if HR varies a lot from prev epoch OR HR ≥ baseline + 5 → REM
-//        (REM has elevated HR + irregular breathing)
-//      • Else → LIGHT
+//   2. Sleep-onset / sleep-offset detection. Walks the timeline to find the
+//      first sustained "calm" window (HR near baseline AND low movement) —
+//      that's when you actually fell asleep, not when you got into bed.
+//      Everything before onset and after offset is reclassified as 'awake'.
+//      Without this, lying in bed watching TV reads as REM (elevated HR)
+//      and inflates "Time slept".
 //
-// This is a rough heuristic. Validation against polysomnography would require
-// data we don't have, so think of these stages as "informed guesses" — the
-// kind a sleep watch makes. Refine over time as real-world data lands.
+//   3. Per-epoch fall-through is unchanged for actually-asleep buckets:
+//      DEEP / REM / LIGHT decided by HR vs baseline, breathing, and HR-delta.
+//
+// Approach (still no ML, fully deterministic):
+//   - baselineHR = 10th-percentile HR across the night = "deep sleep HR"
+//   - calmMoveThreshold = 50th percentile of bucket movement = "low restless"
+//   - sleep onset = first epoch where (HR ≤ baseline+5) AND (movement < calm)
+//     stays true for ≥3 consecutive epochs (~15 min)
+//
+// Validation against polysomnography would require data we don't have, so
+// think of these stages as "informed guesses" — the kind a sleep watch makes.
+
+const BUCKET_SECONDS = 300;
+const SLEEP_HR_DELTA_BPM = 5;
+const ONSET_REQUIRED_CALM_BUCKETS = 3;  // 15 min of sustained calm = real sleep
+
 function classifyStages(
   vitals: Array<{ timestamp: number; heart_rate: number | null; breathing_rate: number | null }>,
   movements: Array<{ timestamp: number; total_movement: number }>,
+  periodStart: number,
+  periodEnd: number,
 ): Epoch[] {
-  if (vitals.length === 0) return [];
+  // Build vitals lookup by 5-min bucket
+  const vitalByBucket = new Map<number, typeof vitals[number]>();
+  for (const v of vitals) {
+    const bucket = Math.floor(v.timestamp / BUCKET_SECONDS) * BUCKET_SECONDS;
+    if (!vitalByBucket.has(bucket)) vitalByBucket.set(bucket, v);
+  }
 
-  // Build movement lookup keyed by 5-min bucket
+  // Build movement lookup by 5-min bucket
   const moveByBucket = new Map<number, number>();
   for (const m of movements) {
-    const bucket = Math.floor(m.timestamp / 300) * 300;
+    const bucket = Math.floor(m.timestamp / BUCKET_SECONDS) * BUCKET_SECONDS;
     moveByBucket.set(bucket, (moveByBucket.get(bucket) || 0) + m.total_movement);
   }
 
-  // Baseline = 10th-percentile HR
+  // Baseline = 10th-percentile HR (the calmest few minutes of the night)
   const hrs = vitals.map((v) => v.heart_rate || 0).filter((h) => h > 0).sort((a, b) => a - b);
   const baselineHR = hrs.length ? hrs[Math.floor(hrs.length * 0.1)] : 60;
 
-  // Movement threshold = 80th percentile of movement counts (above this = restless)
-  const moves = Array.from(moveByBucket.values()).sort((a, b) => a - b);
-  const moveThreshold = moves.length ? moves[Math.floor(moves.length * 0.85)] : 100;
+  // Movement threshold = 85th percentile = "restless / awake"
+  const allMoves = Array.from(moveByBucket.values()).sort((a, b) => a - b);
+  const moveThreshold = allMoves.length ? allMoves[Math.floor(allMoves.length * 0.85)] : 100;
+  // For sleep-onset detection, "calm" just needs to be below the awake bar.
+  // Earlier I used p50 here but that's by-definition strict — half of even
+  // a perfectly slept night exceeds it, breaking onset detection. Mirror
+  // the awake threshold so onset works whenever HR is low and movement
+  // isn't at the awake-restless level.
+  const calmMoveThreshold = moveThreshold;
 
-  const epochs: Epoch[] = [];
-  for (let i = 0; i < vitals.length; i++) {
-    const v = vitals[i];
-    const hr = v.heart_rate ?? baselineHR;
-    const br = v.breathing_rate ?? 14;
-    const bucket = Math.floor(v.timestamp / 300) * 300;
-    const movement = moveByBucket.get(bucket) ?? 0;
-    const prevHr = i > 0 ? (vitals[i - 1].heart_rate ?? baselineHR) : hr;
-    const hrDelta = Math.abs(hr - prevHr);
+  // Walk every 5-min bucket in the requested period (this is what fixes the
+  // chart gaps — we emit an epoch even when vitals are missing).
+  const startBucket = Math.floor(periodStart / BUCKET_SECONDS) * BUCKET_SECONDS;
+  const endBucket = Math.ceil(periodEnd / BUCKET_SECONDS) * BUCKET_SECONDS;
+
+  type WorkingEpoch = {
+    bucket: number;
+    movement: number;
+    hr: number | null;
+    br: number | null;
+    isCalm: boolean;
+    stage: SleepStage;
+  };
+  const working: WorkingEpoch[] = [];
+  let prevHr: number | null = null;
+  let lastClassifiedSleepStage: SleepStage = 'light';
+
+  for (let b = startBucket; b < endBucket; b += BUCKET_SECONDS) {
+    const v = vitalByBucket.get(b);
+    const movement = moveByBucket.get(b) ?? 0;
+    const hr = v?.heart_rate ?? null;
+    const br = v?.breathing_rate ?? null;
+
+    const hrCalm = hr !== null && hr <= baselineHR + SLEEP_HR_DELTA_BPM;
+    const moveCalm = movement < calmMoveThreshold;
+    const isCalm = hrCalm && moveCalm;
 
     let stage: SleepStage;
     if (movement >= moveThreshold && movement > 50) {
       stage = 'awake';
-    } else if (hr <= baselineHR + 2 && br <= 14) {
+    } else if (hr === null) {
+      // No vitals this bucket — carry forward the previous sleep stage if
+      // movement is low; otherwise treat as awake. Avoids leaving holes in
+      // the chart while not fabricating "deep sleep" through restless gaps.
+      stage = moveCalm ? lastClassifiedSleepStage : 'light';
+    } else if (hr <= baselineHR + 2 && (br ?? 14) <= 14) {
       stage = 'deep';
-    } else if (hrDelta >= 4 || hr >= baselineHR + 5) {
-      stage = 'rem';
     } else {
-      stage = 'light';
+      const hrDelta = prevHr !== null ? Math.abs(hr - prevHr) : 0;
+      if (hrDelta >= 4 || hr >= baselineHR + 5) {
+        stage = 'rem';
+      } else {
+        stage = 'light';
+      }
     }
 
-    epochs.push({
-      startUnix: v.timestamp,
-      endUnix: v.timestamp + 300,
-      stage,
-    });
+    if (stage !== 'awake') lastClassifiedSleepStage = stage;
+    if (hr !== null) prevHr = hr;
+
+    working.push({ bucket: b, movement, hr, br, isCalm, stage });
   }
 
-  return epochs;
+  // Sleep-onset detection: first run of ≥ONSET_REQUIRED_CALM_BUCKETS consecutive
+  // calm epochs. Until that point, the user was in bed but awake — relabel to
+  // 'awake' so it doesn't count as "Time slept" and the chart shows the
+  // pre-sleep period correctly.
+  let onsetIdx = -1;
+  let calmRun = 0;
+  for (let i = 0; i < working.length; i++) {
+    if (working[i].isCalm) {
+      calmRun++;
+      if (calmRun >= ONSET_REQUIRED_CALM_BUCKETS) {
+        onsetIdx = i - ONSET_REQUIRED_CALM_BUCKETS + 1;
+        break;
+      }
+    } else {
+      calmRun = 0;
+    }
+  }
+
+  // Sleep-offset detection: same idea, walking backwards. Catches "lying in
+  // bed scrolling on phone after the alarm went off".
+  let offsetIdx = working.length;
+  calmRun = 0;
+  for (let i = working.length - 1; i >= 0; i--) {
+    if (working[i].isCalm) {
+      calmRun++;
+      if (calmRun >= ONSET_REQUIRED_CALM_BUCKETS) {
+        offsetIdx = i + ONSET_REQUIRED_CALM_BUCKETS;
+        break;
+      }
+    } else {
+      calmRun = 0;
+    }
+  }
+
+  // If we never found a calm run, leave classifications as-is — the user
+  // probably never properly slept (or vitals are too sparse to tell), and
+  // the per-epoch heuristic is the best we have.
+  if (onsetIdx >= 0) {
+    for (let i = 0; i < onsetIdx; i++) working[i].stage = 'awake';
+    for (let i = offsetIdx; i < working.length; i++) working[i].stage = 'awake';
+  }
+
+  return working.map((w) => ({
+    startUnix: w.bucket,
+    endUnix: w.bucket + BUCKET_SECONDS,
+    stage: w.stage,
+  }));
 }
 
 router.get(
@@ -111,32 +205,21 @@ router.get(
       orderBy: { timestamp: 'asc' },
     });
 
-    // Dedupe by 5-min bucket. Vitals are nominally on 5-min boundaries but in
-    // practice arrive at slightly-off timestamps; multiple records inside the
-    // same 5-min window would each produce a 300s epoch, double-counting time
-    // (the "REM = 18h for one night" symptom). Snap each vital to its bucket
-    // start, keep the first per bucket.
-    const byBucket = new Map<number, typeof vitalsRaw[number]>();
-    for (const v of vitalsRaw) {
-      const bucket = Math.floor(v.timestamp / 300) * 300;
-      if (!byBucket.has(bucket)) {
-        byBucket.set(bucket, { ...v, timestamp: bucket });
-      }
-    }
-    const vitals = Array.from(byBucket.values()).sort((a, b) => a.timestamp - b.timestamp);
-
     const movements = await prisma.movement.findMany({
       where: { side, timestamp: { gte: startUnix, lte: endUnix } },
       orderBy: { timestamp: 'asc' },
     });
 
+    // Bucket-snap + dedupe is now inside classifyStages.
     const rawEpochs = classifyStages(
-      vitals.map((v) => ({
+      vitalsRaw.map((v) => ({
         timestamp: v.timestamp,
         heart_rate: v.heart_rate,
         breathing_rate: v.breathing_rate,
       })),
       movements.map((m) => ({ timestamp: m.timestamp, total_movement: m.total_movement })),
+      startUnix,
+      endUnix,
     );
 
     // Clamp each epoch to the requested period AND drop epochs that fall

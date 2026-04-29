@@ -83,6 +83,21 @@ export class FrankenMonitor {
 
       const targetPreset = BASE_PRESETS[this.currentBasePreset];
 
+      // If the base is already at the target position, skip the BLE command
+      // entirely. Calling setPosition with the same position is a no-op at
+      // the hardware level — but it leaves isMoving=true in memoryDB with
+      // no incoming position-change packets to ever clear it (the timeout
+      // in trimixBaseControl.parseNotification only gets armed inside the
+      // positionChanged branch). The result is a permanently stuck "Stop
+      // movement" button on the elevation page.
+      const current = memoryDB.data?.baseStatus;
+      if (current && current.head === targetPreset.head && current.feet === targetPreset.feet) {
+        logger.info(
+          `[quadTap] Already at ${this.currentBasePreset} preset (head=${current.head}, feet=${current.feet}); skipping setPosition.`,
+        );
+        return;
+      }
+
       logger.info(
         `[quadTap] Cycling base to ${this.currentBasePreset} preset:`,
         targetPreset,

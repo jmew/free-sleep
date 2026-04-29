@@ -40,6 +40,27 @@ router.get('/base-control', async (_req, res) => {
             isMoving: false,
             lastUpdate: new Date().toISOString(),
         };
+        // Staleness safety net: if isMoving=true but lastUpdate is older than
+        // ISMOVING_STALE_MS, treat it as a stuck flag and return false. The
+        // primary source of truth (BLE position-change packets) clears isMoving
+        // 3s after the last position update, but if BLE goes silent OR if we
+        // ever set isMoving=true and the bed didn't actually move, the flag
+        // sits at true forever. This guards the UI against showing a permanent
+        // "Stop movement" button.
+        const ISMOVING_STALE_MS = 15_000;
+        if (baseStatus.isMoving) {
+            const ageMs = Date.now() - new Date(baseStatus.lastUpdate).getTime();
+            if (ageMs > ISMOVING_STALE_MS) {
+                logger.debug(`baseStatus.isMoving stale by ${ageMs}ms; reporting false`);
+                baseStatus.isMoving = false;
+                // Also clear the stuck flag in memoryDB so future reads are clean
+                // and so the frontend's "movement just finished" effects fire once.
+                if (memoryDB.data?.baseStatus) {
+                    memoryDB.data.baseStatus.isMoving = false;
+                    await memoryDB.write();
+                }
+            }
+        }
         logger.debug('Getting base status:', { ...baseStatus, isConfigured });
         res.json({ ...baseStatus, isConfigured });
     }

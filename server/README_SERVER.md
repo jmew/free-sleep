@@ -191,22 +191,21 @@ journalctl --vacuum-size=100M
 
 Reverse: `cp /etc/systemd/journald.conf.bak /etc/systemd/journald.conf && systemctl restart systemd-journald`.
 
-### 2. Disable `Eight.Capybara` (frees ~180 MB RAM and ~11% CPU)
+### 2. Disable `Eight.Capybara` — DO NOT (it owns the quad-tap haptic buzz)
 
-Capybara is Eight Sleep's proprietary cloud-telemetry agent. It's not used by
-free-sleep — local control goes through `frankenfirmware` on `dac.sock`, not
-the `capybara-dac` socket. Capybara's only systemd reverse-dependency is
-`multi-user.target` (i.e. nothing critical needs it).
+Capybara is Eight Sleep's proprietary cloud-telemetry agent and on first
+glance looks like dead weight (~180 MB RAM, ~11% CPU constant; free-sleep
+doesn't use its `capybara-dac` socket). **However** Capybara also handles
+the haptic confirmation buzz for the quad-tap gesture on the side of the
+bed — the firmware natively buzzes for double/triple taps, but quad-tap
+feedback comes from Capybara. Disabling the service silently kills that
+feedback. Re-enable with `systemctl enable --now capybara` if it's been
+disabled.
 
-```bash
-# On the Pod:
-systemctl stop capybara
-systemctl disable capybara   # use disable, NOT mask — disable is reversible
-```
-
-Reverse: `systemctl enable --now capybara`.
-
-If a future Eight firmware update misbehaves, re-enable first as a sanity check.
+If a future change implements the quad-tap haptic in free-sleep itself
+(e.g. via the unwired `ALARM_SOLO` (17) franken command after the
+quad-tap base-control toggle in [`frankenMonitor.ts`](src/8sleep/frankenMonitor.ts)),
+Capybara could be safely disabled to reclaim the resources.
 
 ### 3. Pin the resolved node binary in `free-sleep.service` (frees ~30 MB RAM)
 

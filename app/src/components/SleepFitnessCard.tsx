@@ -1,31 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import moment from 'moment-timezone';
 import {
   Box,
-  Button,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
   Typography,
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 
 import { SleepRecord } from '../../../server/src/db/sleepRecordsSchema.ts';
 import { useAppStore } from '@state/appStore.tsx';
 import { useSleepScore } from '@api/sleepScore.ts';
 import { useSleepStages } from '@api/sleepStages.ts';
-import { deleteSleepRecord, updateSleepRecord } from '@api/sleep.ts';
 import GlassCard from '@design/GlassCard';
 import { palette, typography } from '@design/tokens';
 
 type Props = {
   sleepRecord: SleepRecord;
-  refetch?: () => void;
 };
 
 function scoreColor(score: number): string {
@@ -143,7 +132,7 @@ function StatCol({ label, value, dotColor }: { label: string; value: string; dot
   );
 }
 
-export default function SleepFitnessCard({ sleepRecord, refetch }: Props) {
+export default function SleepFitnessCard({ sleepRecord }: Props) {
   const { side } = useAppStore();
   const { data: sleepScore, isFetching } = useSleepScore({
     side,
@@ -181,57 +170,13 @@ export default function SleepFitnessCard({ sleepRecord, refetch }: Props) {
     };
   }, [stagesData]);
 
-  const [editOpen, setEditOpen] = useState(false);
-  const [enteredBedAt, setEnteredBedAt] = useState(moment(sleepRecord.entered_bed_at));
-  const [leftBedAt, setLeftBedAt] = useState(moment(sleepRecord.left_bed_at));
-
-  useEffect(() => {
-    setEnteredBedAt(moment(sleepRecord.entered_bed_at));
-    setLeftBedAt(moment(sleepRecord.left_bed_at));
-  }, [sleepRecord]);
-
-  const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this sleep record?')) {
-      try {
-        await deleteSleepRecord(sleepRecord.id);
-        refetch?.();
-      } catch (error) {
-        console.error('Error deleting sleep record:', error);
-        alert('Failed to delete the sleep record.');
-      }
-    }
-  };
-
-  const handleSave = async () => {
-    try {
-      await updateSleepRecord(sleepRecord.id, {
-        entered_bed_at: enteredBedAt.toISOString(),
-        left_bed_at: leftBedAt.toISOString(),
-      });
-      setEditOpen(false);
-      refetch?.();
-    } catch (error) {
-      console.error('Error updating sleep record:', error);
-      alert('Failed to update the sleep record.');
-    }
-  };
-
   const score = sleepScore?.score ?? 0;
   const color = scoreColor(score);
   const continuity = sleepScore?.components.continuity;
   const duration = sleepScore?.components.duration;
 
   return (
-    <GlassCard sx={ { position: 'relative', pt: 3, pb: 2.5 } }>
-      <Box sx={ { position: 'absolute', top: 8, right: 8, display: 'flex', gap: 0.25 } }>
-        <IconButton size="small" onClick={ () => setEditOpen(true) } aria-label="edit">
-          <EditIcon fontSize="small" sx={ { color: palette.text.tertiary } } />
-        </IconButton>
-        <IconButton size="small" onClick={ handleDelete } aria-label="delete">
-          <DeleteIcon fontSize="small" sx={ { color: palette.text.tertiary } } />
-        </IconButton>
-      </Box>
-
+    <GlassCard sx={ { pt: 3, pb: 2.5 } }>
       <Typography
         sx={ {
           ...typography.sectionLabel,
@@ -284,30 +229,6 @@ export default function SleepFitnessCard({ sleepRecord, refetch }: Props) {
           </Box>
         </>
       ) }
-
-      <Dialog open={ editOpen } onClose={ () => setEditOpen(false) } fullWidth>
-        <DialogTitle>Edit Sleep Record</DialogTitle>
-        <DialogContent>
-          <Box display="flex" flexDirection="column" gap={ 2 } mt={ 1 }>
-            <DateTimePicker
-              label="Entered Bed At"
-              value={ enteredBedAt }
-              onChange={ (newValue) => newValue && setEnteredBedAt(newValue) }
-              ampm
-            />
-            <DateTimePicker
-              label="Left Bed At"
-              value={ leftBedAt }
-              onChange={ (newValue) => newValue && setLeftBedAt(newValue) }
-              ampm
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={ () => setEditOpen(false) } color="secondary">Cancel</Button>
-          <Button onClick={ handleSave } variant="contained" color="primary">Save</Button>
-        </DialogActions>
-      </Dialog>
     </GlassCard>
   );
 }

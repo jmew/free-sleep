@@ -41,7 +41,7 @@ export default function SleepPage() {
   const [selectedSleepRecord, setSelectedSleepRecord] = useState<SleepRecord | undefined>(undefined);
 
   // Fetch sleep records for the selected week
-  const { data: sleepRecords, refetch } = useSleepRecords({
+  const { data: sleepRecords } = useSleepRecords({
     side,
     startTime: startTime.toISOString(),
     endTime: endTime.toISOString()
@@ -167,7 +167,7 @@ export default function SleepPage() {
             (
               <>
                 <ErrorBoundary componentName="Sleep fitness card">
-                  <SleepFitnessCard sleepRecord={ selectedSleepRecord } refetch={ refetch } />
+                  <SleepFitnessCard sleepRecord={ selectedSleepRecord } />
                 </ErrorBoundary>
                 <ErrorBoundary componentName="Sleep consistency">
                   <SleepConsistencyCard

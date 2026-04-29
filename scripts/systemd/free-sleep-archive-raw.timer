@@ -1,0 +1,12 @@
+[Unit]
+Description=Run RAW-archive hardlink job every minute
+Requires=free-sleep-archive-raw.service
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=10s
+Unit=free-sleep-archive-raw.service
+
+[Install]
+WantedBy=timers.target

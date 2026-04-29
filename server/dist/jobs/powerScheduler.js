@@ -51,11 +51,14 @@ export const schedulePowerOn = (settingsData, side, day, power) => {
 // for them, even though the biometrics stream was collecting their data.
 //
 // Now sleep analysis is independent: one daily job per side, gated only
-// by the system-wide `biometrics.enabled` toggle. Fixed default time
-// (10:00 local) — late enough that most users are out of bed and the
-// last 12h of raw data is complete; tweak the constants below if a
-// future user routinely sleeps past 10am.
-const SLEEP_ANALYSIS_HOUR = 10;
+// by the system-wide `biometrics.enabled` toggle. The 12:00 default is
+// late enough to comfortably cover users who sleep until 11-11:30 AM,
+// AND we now have a RAW-file archive (scripts/archive-raw.sh +
+// /etc/systemd/system/free-sleep-archive-raw.timer) that hardlinks
+// piezo files before frankenfirmware's ~75-min rolling-buffer truncation,
+// so the analyze always sees the previous 12 h regardless of when it
+// runs. Tweak these constants if both sleepers routinely wake later.
+const SLEEP_ANALYSIS_HOUR = 12;
 const SLEEP_ANALYSIS_MINUTE = 0;
 export const scheduleSleepAnalysis = (settingsData, side) => {
     if (settingsData[side].awayMode)

@@ -16,11 +16,28 @@ logger = get_logger()
 
 
 def get_current_files(folder_path: str):
-    return [
-        str(f.resolve())
-        for f in Path(folder_path).glob('*.RAW')
-        if f.is_file() and f.name != 'SEQNO.RAW'
-    ]
+    # Scan the live /persistent/ folder where frankenfirmware writes RAW files
+    # AND the local archive that hardlinks them before frank truncates its
+    # rolling buffer (~75 min). Without the archive a daily analyze run
+    # routinely sees only the last ~hour of data instead of the previous
+    # 12 h, missing most of the user's sleep. The archive lives at:
+    #   /persistent/free-sleep-data/raw-archive/
+    # populated by /home/dac/free-sleep/scripts/archive-raw.sh on a
+    # systemd timer. Files in both locations point to the same inode (until
+    # frank deletes its entry, after which only the archive entry survives).
+    # Dedupe by filename so we don't decode the same file twice.
+    candidates: dict[str, str] = {}
+    archive_path = '/persistent/free-sleep-data/raw-archive'
+    for folder in (folder_path, archive_path):
+        if not folder:
+            continue
+        try:
+            for f in Path(folder).glob('*.RAW'):
+                if f.is_file() and f.name != 'SEQNO.RAW' and f.name not in candidates:
+                    candidates[f.name] = str(f.resolve())
+        except (OSError, FileNotFoundError):
+            continue
+    return list(candidates.values())
 
 
 def _decode_piezo_data(raw_bytes: bytes) -> np.ndarray:

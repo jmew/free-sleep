@@ -245,6 +245,43 @@ verbose access logging temporarily.
 [`biometric_processor.py`](../biometrics/stream/biometric_processor.py) now
 emits `[presence-debug]` once a minute per side instead of every 30 s.
 
+### 6. RAW-file archive (preserves overnight piezo data for daily analyze)
+
+Frankenfirmware writes one ~6.7 MB RAW piezo file every ~15 min into
+`/persistent/` and maintains a fixed-size rolling buffer (~75 min). After
+uploading to `raw-api-upload.8slp.net:1337` (or attempting to — outbound
+TCP/1337 is blocked by `block_internet_access.sh`, so uploads time out
+indefinitely), it deletes anything older than the buffer window. Net
+effect on a stock Pod: by ~midday the previous night's data is GONE
+from `/persistent/` and the daily `analyze_sleep` job finds nothing for
+sleepers who woke up more than ~1 hour before it ran.
+
+[`scripts/archive-raw.sh`](../scripts/archive-raw.sh) hardlinks RAW files
+into `/persistent/free-sleep-data/raw-archive/` on a 1-min systemd timer.
+Hardlinks share inodes — frank's `rm` removes its filesystem entry, our
+entry keeps the data alive (no double-counting against disk until frank
+actually deletes). 36 h retention caps the archive at ~1 GB. The biometrics
+loader [`load_raw_files.py`](../biometrics/load_raw_files.py) scans both
+`/persistent/` and the archive (deduped by filename), so analyze always
+sees the previous 12 h regardless of when it runs.
+
+```bash
+# On the Pod (as root). The timer + service files live in this repo at
+# scripts/systemd/, but they live OUTSIDE deploy-dev.sh, so install them
+# by hand once after a fresh image:
+scp -P 8822 scripts/archive-raw.sh root@<pod>:/home/dac/free-sleep/scripts/
+scp -P 8822 scripts/systemd/free-sleep-archive-raw.{service,timer} root@<pod>:/etc/systemd/system/
+ssh -p 8822 root@<pod> 'chmod +x /home/dac/free-sleep/scripts/archive-raw.sh \
+  && systemctl daemon-reload \
+  && systemctl enable --now free-sleep-archive-raw.timer'
+```
+
+Verify with `systemctl status free-sleep-archive-raw.timer` (Active: active
+(waiting), Trigger in <60 s) and `ls /persistent/free-sleep-data/raw-archive/
+| wc -l` (should grow by ~4/hour).
+
+Reverse: `systemctl disable --now free-sleep-archive-raw.timer && rm -rf /persistent/free-sleep-data/raw-archive/`.
+
 ### Verifying the optimizations
 
 ```bash

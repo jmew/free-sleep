@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import moment from 'moment-timezone';
 import {
   Box,
@@ -18,6 +18,7 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { SleepRecord } from '../../../server/src/db/sleepRecordsSchema.ts';
 import { useAppStore } from '@state/appStore.tsx';
 import { useSleepScore } from '@api/sleepScore.ts';
+import { useSleepStages } from '@api/sleepStages.ts';
 import { deleteSleepRecord, updateSleepRecord } from '@api/sleep.ts';
 import GlassCard from '@design/GlassCard';
 import { palette, typography } from '@design/tokens';
@@ -42,6 +43,12 @@ function formatTime(iso: string): string {
 function formatDuration(start: string, end: string): string {
   const d = moment.duration(moment(end).diff(moment(start)));
   return `${Math.floor(d.asHours())}h ${d.minutes()}m`;
+}
+
+function formatHM(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return `${h}h ${m}m`;
 }
 
 // Half-circle gauge built from many thin radial ticks, mimicking the 8 Sleep
@@ -143,6 +150,36 @@ export default function SleepFitnessCard({ sleepRecord, refetch }: Props) {
     startTime: sleepRecord.entered_bed_at,
     endTime: sleepRecord.left_bed_at,
   });
+  // Pull stages so we can show the actual sleep window (onset → offset),
+  // not the bed-entry / bed-exit window. The previous version showed
+  // "Bedtime 9:46pm / Wake time 9:50am / Duration 12h 4m" for a night
+  // where the user was actually asleep from 11:32pm → 8:47am — the
+  // SleepConsistencyCard right below it shows the correct window, so
+  // the two cards visibly disagreed.
+  const { data: stagesData } = useSleepStages({
+    side,
+    startTime: sleepRecord.entered_bed_at,
+    endTime: sleepRecord.left_bed_at,
+  });
+
+  const detectedSleepWindow = useMemo(() => {
+    if (!stagesData || stagesData.epochs.length === 0) return null;
+    const firstSleep = stagesData.epochs.find((e) => e.stage !== 'awake');
+    let lastSleep: typeof stagesData.epochs[number] | undefined;
+    for (let i = stagesData.epochs.length - 1; i >= 0; i--) {
+      if (stagesData.epochs[i].stage !== 'awake') {
+        lastSleep = stagesData.epochs[i];
+        break;
+      }
+    }
+    if (!firstSleep || !lastSleep) return null;
+    const sleptSeconds = Math.max(0, stagesData.totalSeconds - (stagesData.totals.awake || 0));
+    return {
+      onsetIso: moment.unix(firstSleep.startUnix).toISOString(),
+      offsetIso: moment.unix(lastSleep.endUnix).toISOString(),
+      sleptSeconds,
+    };
+  }, [stagesData]);
 
   const [editOpen, setEditOpen] = useState(false);
   const [enteredBedAt, setEnteredBedAt] = useState(moment(sleepRecord.entered_bed_at));
@@ -229,16 +266,20 @@ export default function SleepFitnessCard({ sleepRecord, refetch }: Props) {
             />
             <StatCol
               label="Duration"
-              value={ formatDuration(sleepRecord.entered_bed_at, sleepRecord.left_bed_at) }
+              value={
+                detectedSleepWindow
+                  ? formatHM(detectedSleepWindow.sleptSeconds)
+                  : formatDuration(sleepRecord.entered_bed_at, sleepRecord.left_bed_at)
+              }
               dotColor={ duration?.available ? scoreColor(duration.score) : undefined }
             />
             <StatCol
               label="Bedtime"
-              value={ formatTime(sleepRecord.entered_bed_at) }
+              value={ formatTime(detectedSleepWindow?.onsetIso ?? sleepRecord.entered_bed_at) }
             />
             <StatCol
               label="Wake time"
-              value={ formatTime(sleepRecord.left_bed_at) }
+              value={ formatTime(detectedSleepWindow?.offsetIso ?? sleepRecord.left_bed_at) }
             />
           </Box>
         </>

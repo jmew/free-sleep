@@ -40,21 +40,22 @@ const TARGET_GREEN = '#22c55e';
 const TARGET_YELLOW = '#eab308';
 const TARGET_RED = '#ef4444';
 
-// Healthy adult sleep-stage targets, used to color the dot beside REM and
-// Deep percentages. Sources cluster around: deep ~13–23%, REM ~20–25%.
-// We use a single ramp:
-//   green  = inside the healthy band
-//   yellow = within 5pp of either edge of the band (slightly off)
-//   red    = more than 5pp outside the band
-const STAGE_HEALTH: Record<'rem' | 'deep', { lo: number; hi: number }> = {
-  rem:  { lo: 20, hi: 25 },
-  deep: { lo: 13, hi: 23 },
+// Stage-percentage dot color. FLOOR-based, not a two-sided band — there's
+// no real downside to "more deep sleep than typical", and our heuristic
+// classifier tends to over-classify Deep on some nights, so the previous
+// two-sided check was red-flagging perfectly good sleep (e.g. 47 % deep
+// → red). Healthy adult ranges per the literature: deep ~13–23 %, REM
+// ~20–25 %. We give a fairly lenient floor so a slightly-off night still
+// shows yellow, not red.
+const STAGE_HEALTH: Record<'rem' | 'deep', { good: number; warn: number }> = {
+  rem:  { good: 15, warn: 10 },  // green ≥ 15 %, yellow ≥ 10 %, red < 10 %
+  deep: { good: 13, warn: 7 },   // green ≥ 13 %, yellow ≥ 7 %,  red < 7 %
 };
 
 function stageDotColor(stage: 'rem' | 'deep', pct: number): string {
-  const { lo, hi } = STAGE_HEALTH[stage];
-  if (pct >= lo && pct <= hi) return TARGET_GREEN;
-  if (pct >= lo - 5 && pct <= hi + 5) return TARGET_YELLOW;
+  const { good, warn } = STAGE_HEALTH[stage];
+  if (pct >= good) return TARGET_GREEN;
+  if (pct >= warn) return TARGET_YELLOW;
   return TARGET_RED;
 }
 

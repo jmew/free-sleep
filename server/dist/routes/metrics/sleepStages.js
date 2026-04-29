@@ -57,6 +57,19 @@ function classifyStages(vitals, movements, periodStart, periodEnd) {
     // the awake threshold so onset works whenever HR is low and movement
     // isn't at the awake-restless level.
     const calmMoveThreshold = moveThreshold;
+    // HRV quartiles — used to distinguish REM (high HRV: autonomic activity,
+    // dream-related cardiac variability) from deep sleep (low HRV: regulated
+    // parasympathetic, steady cardiac rhythm). The literature is consistent on
+    // this — high-frequency HRV power is the canonical REM marker.
+    // We tolerate sparse / missing HRV gracefully: if the per-night spread is
+    // too narrow (the upstream HRV calc occasionally collapses to a single
+    // value when the present_for gate is failing), we set the bands wide
+    // enough that the HRV branch is effectively a no-op and the HR-only
+    // fallback takes over.
+    const hrvVals = vitals.map((v) => v.hrv ?? 0).filter((h) => h > 0).sort((a, b) => a - b);
+    const hrvP25 = hrvVals.length ? hrvVals[Math.floor(hrvVals.length * 0.25)] : 0;
+    const hrvP75 = hrvVals.length ? hrvVals[Math.floor(hrvVals.length * 0.75)] : 0;
+    const hrvSpreadOk = hrvP75 - hrvP25 >= 5; // need at least 5 ms between Q1 and Q3 to be useful
     // Walk every 5-min bucket in the requested period (this is what fixes the
     // chart gaps — we emit an epoch even when vitals are missing).
     const startBucket = Math.floor(periodStart / BUCKET_SECONDS) * BUCKET_SECONDS;
@@ -69,9 +82,14 @@ function classifyStages(vitals, movements, periodStart, periodEnd) {
         const movement = moveByBucket.get(b) ?? 0;
         const hr = v?.heart_rate ?? null;
         const br = v?.breathing_rate ?? null;
+        const hrv = v?.hrv ?? null;
         const hrCalm = hr !== null && hr <= baselineHR + SLEEP_HR_DELTA_BPM;
         const moveCalm = movement < calmMoveThreshold;
         const isCalm = hrCalm && moveCalm;
+        // HRV-driven REM/deep signals (only meaningful when the per-night HRV
+        // spread is reasonable — see hrvSpreadOk above).
+        const hrvHigh = hrvSpreadOk && hrv !== null && hrv >= hrvP75;
+        const hrvLow = hrvSpreadOk && hrv !== null && hrv <= hrvP25;
         let stage;
         if (movement >= moveThreshold && movement > 50) {
             stage = 'awake';
@@ -82,23 +100,35 @@ function classifyStages(vitals, movements, periodStart, periodEnd) {
             // the chart while not fabricating "deep sleep" through restless gaps.
             stage = moveCalm ? lastClassifiedSleepStage : 'light';
         }
-        else if (hr <= baselineHR + 2 && (br ?? 14) <= 14) {
+        else if (hr <= baselineHR + 2 && !hrvHigh) {
+            // DEEP: low HR (near baseline) and HRV is NOT in the upper quartile.
+            // We deliberately don't require hrvLow — that intersection ate too
+            // many epochs and produced 2-4 % deep on real nights. The literature
+            // says deep sleep has low HR AND low-to-moderate HRV; "not high HRV"
+            // captures both. When HRV is unusable (hrvSpreadOk false), hrvHigh
+            // is forced false so this still fires on HR alone.
             stage = 'deep';
+        }
+        else if (hrvHigh) {
+            // Elevated HRV is the canonical REM marker — autonomic activity from
+            // dreaming. We hit this branch when HR isn't low enough for Deep, so
+            // it's clearly not deep sleep.
+            stage = 'rem';
+        }
+        else if (hr >= baselineHR + 5) {
+            // Elevated HR with no HRV signal to confirm REM — best guess REM.
+            stage = 'rem';
         }
         else {
             const hrDelta = prevHr !== null ? Math.abs(hr - prevHr) : 0;
-            if (hrDelta >= 4 || hr >= baselineHR + 5) {
-                stage = 'rem';
-            }
-            else {
-                stage = 'light';
-            }
+            // Last fallback: HR-delta-based REM (the original heuristic).
+            stage = hrDelta >= 4 ? 'rem' : 'light';
         }
         if (stage !== 'awake')
             lastClassifiedSleepStage = stage;
         if (hr !== null)
             prevHr = hr;
-        working.push({ bucket: b, movement, hr, br, isCalm, stage });
+        working.push({ bucket: b, movement, hr, br, hrv, isCalm, stage });
     }
     // Sleep-onset detection: first run of ≥ONSET_REQUIRED_CALM_BUCKETS consecutive
     // calm epochs. Until that point, the user was in bed but awake — relabel to
@@ -172,6 +202,7 @@ router.get('/sleep-stages', async (req, res) => {
     const rawEpochs = classifyStages(vitalsRaw.map((v) => ({
         timestamp: v.timestamp,
         heart_rate: v.heart_rate,
+        hrv: v.hrv,
         breathing_rate: v.breathing_rate,
     })), movements.map((m) => ({ timestamp: m.timestamp, total_movement: m.total_movement })), startUnix, endUnix);
     // Clamp each epoch to the requested period AND drop epochs that fall

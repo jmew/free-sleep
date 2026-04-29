@@ -219,7 +219,14 @@ class BiometricProcessor:
         # Running metrics
         self.heart_rates:  Deque[float] = deque([], maxlen=self.moving_avg_size)
         self.breath_rates:  Deque[float] = deque([], maxlen=6)
-        self.hrv_rates:  Deque[float] = deque([], maxlen=10)
+        # HRV varies meaningfully between sleep stages (high in REM, low in
+        # deep), so we don't want to average it away. Was maxlen=10 which —
+        # combined with the 30 s hrv_insertion_frequency — was a 5-minute
+        # smoothing window, exactly the granularity we want to preserve.
+        # Keep a 3-reading (~90 s) window: enough to suppress per-tick spikes,
+        # not enough to erase the per-epoch variability the stage classifier
+        # uses.
+        self.hrv_rates:  Deque[float] = deque([], maxlen=3)
         self.lower_bound = None
         self.upper_bound = None
         self.hr_moving_avg = None
@@ -356,7 +363,18 @@ class BiometricProcessor:
             pass
         else:
             # No signal here. Count toward exit.
-            self.present_for = 0
+            # Only reset the entry counter if we haven't entered presence yet.
+            # While we ARE present, present_for doubles as the "seconds since
+            # presence started" gate that downstream calculations (HR, HRV,
+            # breath rate) rely on. Resetting it here on every quiet moment
+            # — which happens routinely during deep sleep when the signal
+            # falls below the noise threshold — would prevent HRV (300 s
+            # gate) from ever recomputing during long sessions, leaving the
+            # rolling-average `self.hrv` frozen at its first stable value.
+            # The slow-exit / fast-exit blocks below explicitly reset
+            # present_for when a session truly ends.
+            if not self.present:
+                self.present_for = 0
             self.not_present_for += 1
             if self.not_present_for == self.no_presence_tolerance:
                 logger.info(
@@ -365,6 +383,7 @@ class BiometricProcessor:
                 )
                 self.present = False
                 self.reset()
+                self.present_for = 0
                 self._presence_session_seconds = 0
                 self._update_presence_api(False)
                 self._presence_heartbeat_counter = 0
@@ -399,6 +418,7 @@ class BiometricProcessor:
             )
             self.present = False
             self.reset()
+            self.present_for = 0
             self._presence_session_seconds = 0
             self._time_since_clearly_dominant = 0
             self._update_presence_api(False)

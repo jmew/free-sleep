@@ -97,10 +97,14 @@ export const useScheduleStore = create<ScheduleStore>((set, get) => ({
   },
   changesPresent: false,
   checkForChanges: () => {
-    const { selectedDay, selectedSchedule, originalSchedules, selectedDays } = get();
+    const { selectedDay, selectedSchedule, originalSchedules } = get();
     if (!originalSchedules) return;
     const { side } = useAppStore.getState();
-    const changesPresent = !_.isEqual(originalSchedules[side][selectedDay], selectedSchedule) || _.some(selectedDays, value => value === true);
+    // Save bar appears only when the schedule itself has been edited.
+    // The "apply to other days" picker now lives inside the save bar,
+    // so toggling other-day checkboxes shouldn't on its own trigger
+    // the unsaved-changes state.
+    const changesPresent = !_.isEqual(originalSchedules[side][selectedDay], selectedSchedule);
 
     set({ changesPresent });
   },

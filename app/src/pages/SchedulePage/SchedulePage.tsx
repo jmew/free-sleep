@@ -8,6 +8,7 @@ import { DeepPartial } from 'ts-essentials';
 import moment from 'moment-timezone';
 
 import AlarmSection from './AlarmSection/AlarmSection.tsx';
+import OneOffAlarmSection from './OneOffAlarmSection.tsx';
 import CopyToOtherDays from './CopyToOtherDays.tsx';
 import DayTabs from './DayTabs.tsx';
 import FloatingSaveBar from './FloatingSaveBar.tsx';
@@ -159,6 +160,7 @@ export default function SchedulePage() {
         <TemperatureAdjustmentsSection displayCelsius={ displayCelsius }/>
       </GlassCard>
       <AlarmSection/>
+      <OneOffAlarmSection/>
 
       <FloatingSaveBar onSave={ handleSave }/>
     </PageContainer>

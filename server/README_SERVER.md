@@ -171,5 +171,95 @@ server/
 
 ---
 
+## Pod-side runtime configuration
+
+These changes live on the Pod itself, not in this repo. They were applied
+manually after a fresh install to free RAM/CPU/disk and quiet logs. If you
+re-image a Pod or fork this onto a new device, replay them. Each is reversible.
+
+### 1. Cap journald at 100 MB (recovers ~700 MB on `/persistent`)
+
+`/var/log/journal` is symlinked to `/persistent/journal`, so unbounded systemd
+logs eat into the persistent partition.
+
+```bash
+# On the Pod (as root):
+sed -i.bak 's/^SystemMaxUse=.*/SystemMaxUse=100M/' /etc/systemd/journald.conf
+systemctl restart systemd-journald
+journalctl --vacuum-size=100M
+```
+
+Reverse: `cp /etc/systemd/journald.conf.bak /etc/systemd/journald.conf && systemctl restart systemd-journald`.
+
+### 2. Disable `Eight.Capybara` (frees ~180 MB RAM and ~11% CPU)
+
+Capybara is Eight Sleep's proprietary cloud-telemetry agent. It's not used by
+free-sleep — local control goes through `frankenfirmware` on `dac.sock`, not
+the `capybara-dac` socket. Capybara's only systemd reverse-dependency is
+`multi-user.target` (i.e. nothing critical needs it).
+
+```bash
+# On the Pod:
+systemctl stop capybara
+systemctl disable capybara   # use disable, NOT mask — disable is reversible
+```
+
+Reverse: `systemctl enable --now capybara`.
+
+If a future Eight firmware update misbehaves, re-enable first as a sanity check.
+
+### 3. Pin the resolved node binary in `free-sleep.service` (frees ~30 MB RAM)
+
+The default unit file used `/home/dac/.volta/bin/node` — that's volta's shim,
+which exec's the real node but stays as an idle parent process. Pin to the
+resolved path so there's only one process:
+
+```bash
+# On the Pod:
+NEW_NODE_PATH=$(sudo -u dac /home/dac/.volta/bin/volta which node)
+SVC=/etc/systemd/system/free-sleep.service
+cp "$SVC" "${SVC}.bak"
+sed -i "s|^ExecStart=.*|ExecStart=${NEW_NODE_PATH} dist/server.js|" "$SVC"
+systemctl daemon-reload
+systemctl restart free-sleep
+```
+
+Verify with `pstree -p $(systemctl show -p MainPID --value free-sleep)` — should
+be a single node process, not parent + child.
+
+Reverse: `cp ${SVC}.bak ${SVC} && systemctl daemon-reload && systemctl restart free-sleep`.
+
+If volta upgrades the cached node version later, the pinned path will go stale.
+Re-run the snippet above to refresh it.
+
+### 4. Quieter access logger (in-repo)
+
+The express access logger now demotes successful, fast (< 250 ms) responses
+from `info` to `debug`. In production (`NODE_ENV=production`, default
+`LOG_LEVEL=info`) those are dropped entirely; only ≥ 400 status codes or
+slow responses are logged. See [setup/middleware.ts](src/setup/middleware.ts).
+Set `LOG_LEVEL=debug` in `/home/dac/free-sleep/server/.env.pod` to bring back
+verbose access logging temporarily.
+
+### 5. Less spammy presence-debug log (in-repo)
+
+[`biometric_processor.py`](../biometrics/stream/biometric_processor.py) now
+emits `[presence-debug]` once a minute per side instead of every 30 s.
+
+### Verifying the optimizations
+
+```bash
+# RAM should show ~150–200 MB more available than a stock Pod:
+ssh -p 8822 root@<pod> 'free -h | head -2'
+
+# /persistent should be << 1 GB:
+ssh -p 8822 root@<pod> 'df -h /persistent | tail -1'
+
+# Capybara should be inactive/disabled:
+ssh -p 8822 root@<pod> 'systemctl status capybara || true'
+
+# Single-process node:
+ssh -p 8822 root@<pod> 'pstree -p $(systemctl show -p MainPID --value free-sleep)'
+```
 
 

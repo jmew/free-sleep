@@ -35,6 +35,17 @@ export const TapConfig = z.discriminatedUnion('type', [
 
 export const GestureSchema = z.enum(['doubleTap', 'tripleTap', 'quadTap']);
 
+// One-off alarm: fires once at fireAt then disables itself. Independent of
+// the recurring per-day-of-week alarm. fireAt is an ISO 8601 datetime
+// including offset, e.g. "2026-04-30T07:00:00-07:00".
+const OneOffAlarmSchema = z.object({
+  enabled: z.boolean(),
+  fireAt: z.string(),
+  vibrationIntensity: z.number().int().min(1).max(100),
+  vibrationPattern: z.enum(['double', 'rise']),
+  duration: z.number().int().min(0).max(180),
+});
+
 const SideSettingsSchema = z.object({
   name: z.string().min(1).max(20),
   awayMode: z.boolean(),
@@ -49,6 +60,7 @@ const SideSettingsSchema = z.object({
       expiresAt: z.string(),
     })
   }),
+  oneOffAlarm: OneOffAlarmSchema,
   taps: z.object({
     doubleTap: TapConfig,
     tripleTap: TapConfig,

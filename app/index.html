@@ -7,7 +7,12 @@
 
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <!-- maximum-scale=1 + user-scalable=no removed: on Android Chrome (esp. on
+         tablets) those two together change touch-event delivery so single-
+         finger drag gets eaten by the gesture handler instead of scrolling.
+         iOS Safari ignored them so this never showed up there. We accept the
+         minor regression that pinch-zoom is now possible on the page. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <!-- Apple PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes">

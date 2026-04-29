@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { CircularSliderWithChildren } from 'react-circular-slider-svg';
 import { postDeviceStatus } from '@api/deviceStatus.ts';
 import { useAppStore } from '@state/appStore';
@@ -19,7 +20,7 @@ type SliderProps = {
 }
 
 export default function Slider({ isOn, currentTargetTemp, refetch, currentTemperatureF, displayCelsius }: SliderProps) {
-  const { deviceStatus, setDeviceStatus } = useControlTempStore();
+  const { deviceStatus, setDeviceStatus, beginEdit, endEdit } = useControlTempStore();
   const { isUpdating, setIsUpdating, side } = useAppStore();
   const { data: settings } = useSettings();
   const isInAwayMode = settings?.[side].awayMode;
@@ -27,8 +28,32 @@ export default function Slider({ isOn, currentTargetTemp, refetch, currentTemper
   const { width, ref } = useResizeDetector();
   const theme = useTheme();
   const sliderColor = getTemperatureColor(deviceStatus?.[side]?.targetTemperatureF);
+  // Tracks whether this drag/click has already opened the edit gate. We open
+  // it on the first onChange (or directly in handleControlFinished if the
+  // user clicked without dragging) and close it once the POST settles.
+  const dragOpenRef = useRef(false);
+
+  const openGateIfClosed = () => {
+    if (!dragOpenRef.current) {
+      dragOpenRef.current = true;
+      beginEdit();
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (dragOpenRef.current) {
+        dragOpenRef.current = false;
+        endEdit();
+      }
+    };
+  }, [endEdit]);
+
   const handleControlFinished = async () => {
     if (!deviceStatus) return;
+    // Click without drag (no onChange fired) — still need to open the gate
+    // so a stale WS push doesn't snap the value back during the POST.
+    openGateIfClosed();
 
     setIsUpdating(true);
     void postDeviceStatus({
@@ -40,8 +65,18 @@ export default function Slider({ isOn, currentTargetTemp, refetch, currentTemper
         // Wait 1 second before refreshing the device status
         return new Promise((resolve) => setTimeout(resolve, 1_500));
       })
-      .then(() => refetch())
+      .then(() => {
+        if (dragOpenRef.current) {
+          dragOpenRef.current = false;
+          endEdit();
+        }
+        return refetch();
+      })
       .catch(error => {
+        if (dragOpenRef.current) {
+          dragOpenRef.current = false;
+          endEdit();
+        }
         console.error(error);
       })
       .finally(() => {
@@ -81,6 +116,7 @@ export default function Slider({ isOn, currentTargetTemp, refetch, currentTemper
             onChange: (value) => {
               if (disabled) return;
               if (Math.round(value) !== deviceStatus?.[side]?.targetTemperatureF) {
+                openGateIfClosed();
                 setDeviceStatus({ [side]: { targetTemperatureF: Math.round(value) } });
               }
             },
@@ -93,6 +129,7 @@ export default function Slider({ isOn, currentTargetTemp, refetch, currentTemper
             onChange: (value) => {
               if (disabled) return;
               if (Math.round(value) !== deviceStatus?.[side]?.targetTemperatureF) {
+                openGateIfClosed();
                 setDeviceStatus({ [side]: { targetTemperatureF: Math.round(value) } });
               }
             },

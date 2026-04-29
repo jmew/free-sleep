@@ -17,6 +17,8 @@ import sys
 import platform
 import os
 import gc
+import json
+import urllib.request
 from argparse import Namespace, ArgumentParser
 import traceback
 from typing import Union
@@ -151,6 +153,27 @@ def update_health_both_sides(status: str, message: str):
     update_health('calibrateRight', status, message)
 
 
+def _is_anyone_currently_present() -> Union[bool, None]:
+    """Returns True if either side is currently occupied per the live stream.
+
+    The live presence detector (stream_processor / biometric_processor) is
+    much more reliable than identify_baseline_period: it uses dual-piezo
+    where available, the cross-side dominance arbiter, and a 3-min stillness
+    grace. So if it says someone is on the bed right now, we should trust it
+    and skip calibration — calibrating against a still person produces a
+    baseline that's offset toward "present" and tanks subsequent detection.
+
+    Returns True if occupied, False if empty, None if the API is unreachable.
+    """
+    try:
+        with urllib.request.urlopen('http://127.0.0.1:3000/api/metrics/presence', timeout=5) as r:
+            data = json.load(r)
+        return bool(data.get('left', {}).get('present')) or bool(data.get('right', {}).get('present'))
+    except Exception as err:
+        logger.warning(f'Could not reach presence API: {err}')
+        return None
+
+
 if __name__ == "__main__":
     try:
         if not is_biometrics_enabled():
@@ -160,6 +183,19 @@ if __name__ == "__main__":
         logger.debug(f"START Memory Usage: {get_memory_usage_unix():.2f} MB")
         if get_available_memory_mb() < 400:
             raise MemoryError('Available memory is too little, exiting...')
+
+        # Bail before doing anything if the bed is occupied right now. The daily
+        # cron runs at 17:00/17:30 PDT, when someone may already be in bed.
+        # identify_baseline_period can be fooled by a still person, producing
+        # a baseline offset toward "present" and breaking detection.
+        occupied = _is_anyone_currently_present()
+        if occupied is True:
+            msg = 'Bed is currently occupied — skipping calibration to avoid corrupting the baseline.'
+            logger.warning(msg)
+            update_health_both_sides('failed', msg)
+            sys.exit(0)
+        elif occupied is None:
+            logger.warning('Presence API unreachable — proceeding with calibration anyway.')
 
         if logger.env == 'prod':
             args = _parse_args()

@@ -44,13 +44,24 @@ function isAllowedOrigin(origin) {
     }
     return false;
 }
+// Skip logging boring 2xx responses that finish quickly. The Sleep page fires
+// 8 parallel /api/metrics/sleep queries per render and each used to produce a
+// log line — drowning out anything actually worth seeing. Errors and slow
+// responses still log at info level so debugging is unaffected.
+const SLOW_REQUEST_MS = 250;
 export default function (app) {
     app.use((req, res, next) => {
         const startTime = Date.now();
-        // Hook into the response `finish` event to log after the response is sent
         res.on('finish', () => {
             const duration = Date.now() - startTime;
-            logger.info(`${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms`);
+            const isError = res.statusCode >= 400;
+            const isSlow = duration >= SLOW_REQUEST_MS;
+            if (isError || isSlow) {
+                logger.info(`${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms`);
+            }
+            else {
+                logger.debug(`${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms`);
+            }
         });
         next();
     });

@@ -7,6 +7,10 @@ const router = express.Router();
 const PresenceSideSchema = z.object({
     present: z.boolean(),
     lastUpdatedAt: z.string().optional(),
+    // Last time `present` was reported as true. Used by the auto-off monitor
+    // and surfaced to integrations (e.g. Home Assistant) to compute "minutes
+    // since presence". Distinct from lastUpdatedAt, which advances every POST.
+    lastPresenceAt: z.string().optional(),
 });
 export const PresenceDataSchema = z.object({
     left: PresenceSideSchema.optional(),
@@ -24,6 +28,8 @@ const presenceData = {
         lastUpdatedAt: moment.tz(settingsDB.data.timeZone).format(),
     },
 };
+// In-process accessor for the auto-off monitor. Avoids a self-HTTP call.
+export const getPresenceData = () => presenceData;
 /**
  * POST /presence
  * Update presence data for one or both sides
@@ -49,15 +55,23 @@ router.post('/presence', async (req, res) => {
             });
         }
         const currentTime = moment.tz(settingsDB.data.timeZone).format();
-        // Update left side if provided
-        if (body.left) {
-            presenceData.left.present = body.left.present;
-            presenceData.left.lastUpdatedAt = currentTime;
-        }
-        // Update right side if provided
-        if (body.right) {
-            presenceData.right.present = body.right.present;
-            presenceData.right.lastUpdatedAt = currentTime;
+        for (const side of ['left', 'right']) {
+            const update = body[side];
+            if (!update)
+                continue;
+            const wasPresent = presenceData[side].present;
+            presenceData[side].present = update.present;
+            presenceData[side].lastUpdatedAt = currentTime;
+            // lastPresenceAt = the most recent moment the system believed someone
+            // was on this side. Update on entry (update.present == true), on the
+            // true→false transition (we just observed they left), or steady-state
+            // present. Without the exit case, the auto-off monitor would treat
+            // lastPresenceAt as 8h stale once the user gets out of bed and fire
+            // immediately — the Python stream only POSTs on transitions, so there
+            // are no in-between heartbeats to refresh it.
+            if (update.present || wasPresent) {
+                presenceData[side].lastPresenceAt = currentTime;
+            }
         }
         return res.status(200).json(presenceData);
     }

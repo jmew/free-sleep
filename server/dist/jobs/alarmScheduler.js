@@ -76,6 +76,70 @@ function nextOccurrenceHhMm(tz, hhmm) {
     }
     return candidate;
 }
+/**
+ * One-off alarm: stand-alone alarm that fires once at a specific datetime then
+ * auto-disables itself. Independent of the per-day-of-week recurring alarm.
+ *
+ * The fireAt field is an ISO 8601 string including offset (e.g.
+ * "2026-04-30T07:00:00-07:00"). After firing we flip enabled=false and write
+ * the settings back, which triggers chokidar → setupJobs() and the rebuilt
+ * scheduler skips this branch.
+ */
+export function scheduleOneOffAlarm(settingsData, side) {
+    const o = settingsData[side]?.oneOffAlarm;
+    if (!o || !o.enabled)
+        return null;
+    if (!o.fireAt)
+        return null;
+    const fireAt = moment(o.fireAt);
+    if (!fireAt.isValid()) {
+        logger.warn(`One-off alarm for ${side} has invalid fireAt: ${o.fireAt}`);
+        return null;
+    }
+    const now = moment();
+    if (!fireAt.isAfter(now)) {
+        // Already in the past — auto-disable so it doesn't keep tripping the
+        // chokidar→setupJobs loop on every save. We do this best-effort and
+        // don't await; if the write races with another save, the worst case is
+        // one extra no-op rebuild.
+        logger.debug(`One-off alarm for ${side} fireAt is in the past; disabling.`);
+        settingsDB.read()
+            .then(() => {
+            if (settingsDB.data[side].oneOffAlarm.fireAt === o.fireAt) {
+                settingsDB.data[side].oneOffAlarm.enabled = false;
+                return settingsDB.write();
+            }
+        })
+            .catch((err) => logger.warn(`Failed to clear stale one-off alarm: ${err}`));
+        return null;
+    }
+    logger.debug(`Scheduling one-off alarm for ${side} at ${fireAt.format()}`);
+    schedule.scheduleJob(`${side}-one-off-alarm`, fireAt.toDate(), async () => {
+        try {
+            await executeAlarm({
+                side,
+                vibrationIntensity: o.vibrationIntensity,
+                duration: o.duration,
+                vibrationPattern: o.vibrationPattern,
+            });
+        }
+        finally {
+            // Auto-disable after firing (or after attempt) so the user doesn't
+            // need to come back and manually toggle it off — that's the whole
+            // point of a "one-off" alarm.
+            try {
+                await settingsDB.read();
+                if (settingsDB.data[side].oneOffAlarm.fireAt === o.fireAt) {
+                    settingsDB.data[side].oneOffAlarm.enabled = false;
+                    await settingsDB.write();
+                }
+            }
+            catch (err) {
+                logger.error(`Failed to auto-disable one-off alarm for ${side}: ${err}`);
+            }
+        }
+    });
+}
 export function scheduleAlarmOverride(settingsData, side) {
     const alarmOverride = settingsData[side]?.scheduleOverrides?.alarm;
     if (!alarmOverride || alarmOverride.disabled)

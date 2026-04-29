@@ -51,7 +51,14 @@ def _get_presence_intervals(df: pd.DataFrame, side: Side, presence_duration_thre
 
     # Iterate over DataFrame to find state changes
     for timestamp, row in df.iterrows():
-        status = row[occupancy_col] == 2  # Presence condition
+        # Presence = EITHER piezo OR cap fires. Requiring both (== 2) loses
+        # roughly half of true occupancy: piezo misses still sleep (range
+        # below threshold when only breathing), cap misses motion-only
+        # moments and is noisy enough that the 90%-of-10s rolling check
+        # only fires ~40% of rows during real occupancy. The 1-minute
+        # duration filter, 15-min merge, and 3-hour sleep-period minimum
+        # downstream still suppress short false positives.
+        status = row[occupancy_col] >= 1
 
         if current_status is None:
             current_status = status

@@ -4,6 +4,7 @@ import schedule from 'node-schedule';
 import logger from './logger.js';
 import { connectFranken, disconnectFranken, getFrankenQueueDepth } from './8sleep/frankenServer.js';
 import { FrankenMonitor } from './8sleep/frankenMonitor.js';
+import { startPresenceAutoOff, stopPresenceAutoOff } from './8sleep/presenceAutoOffMonitor.js';
 import './jobs/jobScheduler.js';
 // Setup code
 import setupMiddleware from './setup/middleware.js';
@@ -71,6 +72,7 @@ async function gracefulShutdown(signal) {
             });
         }
         if (!config.remoteDevMode) {
+            stopPresenceAutoOff();
             frankenMonitor?.stop();
             await disconnectFranken();
             logger.debug('Successfully closed Franken components.');
@@ -98,6 +100,7 @@ const initFrankenMonitor = () => {
     frankenMonitor = new FrankenMonitor();
     void frankenMonitor.start();
     logger.info('Frank monitor started!');
+    startPresenceAutoOff();
 };
 // Main startup function
 async function startServer() {

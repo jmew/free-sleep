@@ -1,2 +1,0 @@
-import{j as r}from"./react-vendor-w_8ZhOax.js";import{H as t}from"./Header-BaIzj6ST.js";import{aC as o}from"./mui-vendor-CqyAPM7C.js";import{P as i}from"./PageContainer-CMz4QbxU.js";import"./charts-vendor-BS46xvu8.js";import"./date-vendor-mXW2sYka.js";import"./index.js";function f(){return r.jsx(i,{sx:{mb:15,gap:1},children:r.jsx(t,{title:"Vitals",icon:r.jsx(o,{})})})}export{f as default};
-//# sourceMappingURL=VitalsPage-BHQHkTSA.js.map

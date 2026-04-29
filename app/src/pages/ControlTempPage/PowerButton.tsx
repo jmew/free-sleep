@@ -22,6 +22,8 @@ export default function PowerButton({ isOn, refetch }: PowerButtonProps) {
   const { data: settings } = useSettings();
   const { data: services } = useServices();
   const setDeviceStatus = useControlTempStore(state => state.setDeviceStatus);
+  const beginEdit = useControlTempStore(state => state.beginEdit);
+  const endEdit = useControlTempStore(state => state.endEdit);
   const isInAwayMode = settings?.[side].awayMode;
   const disabled = isUpdating || isInAwayMode;
   const [showAnalyzeSleep, setShowAnalyzeSleep] = useState(false);
@@ -41,15 +43,27 @@ export default function PowerButton({ isOn, refetch }: PowerButtonProps) {
     }
 
     setIsUpdating(true);
+    let gateOpen = true;
+    beginEdit();
     setDeviceStatus(deviceStatus);
     postDeviceStatus(deviceStatus)
       .then(() => {
         // Wait 1 second before refreshing the device status
         return new Promise((resolve) => setTimeout(resolve, 1_000));
       })
-      .then(() => refetch())
+      .then(() => {
+        if (gateOpen) {
+          gateOpen = false;
+          endEdit();
+        }
+        return refetch();
+      })
       .then((data) => setDeviceStatus(data.data))
       .catch(error => {
+        if (gateOpen) {
+          gateOpen = false;
+          endEdit();
+        }
         console.error(error);
       })
       .finally(() => {

@@ -206,6 +206,13 @@ const createSettings = (): Settings => ({
       temperatureSchedules: { disabled: false, expiresAt: '' },
       alarm: { disabled: false, timeOverride: '', expiresAt: '' },
     },
+    oneOffAlarm: {
+      enabled: false,
+      fireAt: '',
+      vibrationIntensity: 100,
+      vibrationPattern: 'rise',
+      duration: 30,
+    },
     taps: {
       doubleTap: {
         type: 'temperature',
@@ -231,6 +238,13 @@ const createSettings = (): Settings => ({
     scheduleOverrides: {
       temperatureSchedules: { disabled: false, expiresAt: '' },
       alarm: { disabled: false, timeOverride: '', expiresAt: '' },
+    },
+    oneOffAlarm: {
+      enabled: false,
+      fireAt: '',
+      vibrationIntensity: 100,
+      vibrationPattern: 'rise',
+      duration: 30,
     },
     taps: {
       doubleTap: {

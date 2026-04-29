@@ -17,6 +17,13 @@ const defaultSideSettings = {
             expiresAt: '',
         }
     },
+    oneOffAlarm: {
+        enabled: false,
+        fireAt: '',
+        vibrationIntensity: 100,
+        vibrationPattern: 'rise',
+        duration: 30,
+    },
     taps: {
         doubleTap: {
             type: 'temperature',

@@ -1,0 +1,2 @@
+import{f as i,j as e}from"./react-vendor-BtN74dLI.js";import{au as t,am as n,w as o}from"./mui-vendor-BCO7Euz1.js";function x({title:r,icon:s}){const a=i();return e.jsxs(t,{container:!0,alignItems:"center",children:[e.jsx(t,{item:!0,xs:2,display:"flex",alignItems:"center",children:e.jsx(n,{onClick:()=>a(-1),sx:{cursor:"pointer",fontSize:28}})}),e.jsx(t,{item:!0,xs:8,display:"flex",justifyContent:"center",children:e.jsxs(o,{variant:"h6",display:"flex",alignItems:"center",gap:1,children:[s,r]})})]})}export{x as H};
+//# sourceMappingURL=Header-PaZf6vS4.js.map

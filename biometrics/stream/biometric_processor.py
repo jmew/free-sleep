@@ -106,6 +106,10 @@ class _PresenceCoordinator:
         """For debug logging — current state of both sides."""
         return {'left_range': cls._latest['left'], 'right_range': cls._latest['right']}
 
+    @classmethod
+    def is_above_noise(cls, side: str) -> bool:
+        return cls._latest[side] >= cls.NOISE_THRESHOLD
+
 
 class BiometricProcessor:
     heart_rates: Deque[float]   # Store last moving_avg_size heart rates (120)
@@ -181,6 +185,29 @@ class BiometricProcessor:
         self.hrv = 0
         self.not_present_for = 0
         self.present_for = 0
+        # Re-POST the current presence state every N seconds even when nothing
+        # changed. Without this:
+        #   - A server restart wipes the in-memory presenceData, but Python
+        #     never re-tells it (only POSTs on transitions). The dot stays
+        #     yellow/grey until the user gets out of bed.
+        #   - The auto-off monitor only knows lastPresenceAt = "first moment
+        #     we saw them tonight" — that goes stale by hours and would fire
+        #     prematurely. The heartbeat keeps it within a minute of "now".
+        self._presence_heartbeat_interval = 60
+        self._presence_heartbeat_counter = 0
+        # Tracks "the other side has been clearly dominant" — drives one of
+        # the two short-session fast-exit triggers below.
+        self._time_since_clearly_dominant = 0
+        # Wall-clock seconds since this side transitioned to present. Used
+        # to gate fast-exit eligibility: fresh sessions (< _established_threshold)
+        # are eligible for 30 s fast-exit; established sessions are protected
+        # by the slow 3-min grace. This is what differentiates a still-wife
+        # (long established session, signal drops because she's sleeping)
+        # from a climb-in transient (short session, signal drops because the
+        # user is actually settled on the OTHER side).
+        self._presence_session_seconds = 0
+        self._established_threshold = 60
+        self._fast_exit_grace = 30
         # Rolling log of the last 60 signal_range observations so we can debug
         # what threshold value would actually work for this user. Cheap.
         self._recent_ranges: Deque[float] = deque([], maxlen=60)
@@ -270,13 +297,29 @@ class BiometricProcessor:
         # it tell us whether THIS side is actually occupied (vs just picking
         # up mechanical transmission from the other side).
         decision = _PresenceCoordinator.report(self.side, signal_range)
-        should_be_present = decision[self.side]
+        other_side = 'right' if self.side == 'left' else 'left'
 
-        # Periodic debug log — includes both piezos' individual ranges so we
-        # can see whether they're correlated (= real presence) or one is
-        # dominating (= asymmetric transmission).
+        # Three mutually exclusive outcomes from the coordinator:
+        #   - is_clearly_dominant: "I'm clearly the one occupied" (decision_self
+        #     True AND decision_other False) — strong signal that justifies
+        #     entering or staying present.
+        #   - is_ambiguous_both: "both above noise, neither dominant by 1.3×"
+        #     — usually cross-mattress transmission while a single user moves
+        #     heavily on one side. NEVER counts toward entering present.
+        #     Holds existing presence steady (doesn't decrement either way).
+        #   - else: this side has no signal worth speaking of — count toward exit.
+        is_clearly_dominant = decision[self.side] and not decision[other_side]
+        other_is_clearly_dominant = decision[other_side] and not decision[self.side]
+        is_ambiguous_both = decision[self.side] and decision[other_side]
+
+        if is_clearly_dominant:
+            self._time_since_clearly_dominant = 0
+        elif other_is_clearly_dominant:
+            self._time_since_clearly_dominant += 1
+
+        # Periodic debug log
         self._range_log_counter += 1
-        if self._range_log_counter >= 30:
+        if self._range_log_counter >= 60:
             self._range_log_counter = 0
             snap = _PresenceCoordinator.snapshot()
             logger.info(
@@ -284,30 +327,95 @@ class BiometricProcessor:
                 f'p1={r1:.0f} p2={r2:.0f} '
                 f'L={snap["left_range"]:.0f} R={snap["right_range"]:.0f} '
                 f'decision_L={decision["left"]} decision_R={decision["right"]} '
-                f'present={self.present} not_present_for={self.not_present_for}'
+                f'present={self.present} not_present_for={self.not_present_for} '
+                f'session={self._presence_session_seconds}s'
             )
 
-        if should_be_present:
+        if is_clearly_dominant:
+            # Real signal on this side. Reset exit counter; advance entry counter.
             self.not_present_for = 0
-            self.present_for = self.present_for + 1
-            # Require ≥3 consecutive elevated readings before flipping present.
-            # Filters brief transients like clothes tossed on the bed, blankets
-            # shifted, etc — those produce 1–2 elevated readings then settle,
-            # never reaching 3 in a row. A person lying down sustains the
-            # signal indefinitely so this trips quickly.
-            if not self.present and self.present_for >= 3:
+            self.present_for += 1
+            # Require ≥5 consecutive seconds of *clear* dominance to enter.
+            # Was 3 + "any decision_self True"; bumped to 5 + clear-dominance-only
+            # to filter brief climb-in transients where the user's body crosses
+            # the wrong-side piezo for a few seconds before settling.
+            if not self.present and self.present_for >= 5:
                 self.present = True
+                self._presence_session_seconds = 0
                 self._update_presence_api(True)
+                self._presence_heartbeat_counter = 0
+        elif is_ambiguous_both:
+            # Neither entering nor exiting — hold existing state. We can't
+            # tell from one tick whether this is real two-person occupancy or
+            # cross-transmission, so defer to history (existing self.present)
+            # and the fast-exit / slow-grace counters. Crucially, we don't
+            # reset present_for here either: that lets a second person
+            # joining an already-occupied bed accumulate the 5 seconds of
+            # clear dominance gradually even if it's interleaved with
+            # ambiguous moments while both signals are comparable.
+            pass
         else:
+            # No signal here. Count toward exit.
             self.present_for = 0
             self.not_present_for += 1
             if self.not_present_for == self.no_presence_tolerance:
                 logger.info(
-                    f'User not detected for {self.no_presence_tolerance}s on {self.side} side, resetting...'
+                    f'Slow exit on {self.side} side: '
+                    f'no signal for {self.no_presence_tolerance}s'
                 )
                 self.present = False
                 self.reset()
+                self._presence_session_seconds = 0
                 self._update_presence_api(False)
+                self._presence_heartbeat_counter = 0
+
+        # Short-session fast-exit. The slow 3-min grace exists for established
+        # sleep — wife stops moving, signal drops below noise, but she's still
+        # there. We don't want to bypass it for established presence. But
+        # within the first _established_threshold seconds we DO want to bail
+        # quickly if either:
+        #   (a) the signal is gone and stays gone (climb-in transient that
+        #       triggered presence on the wrong side, then user settled on
+        #       the OTHER side — both sides go below noise as the user lies
+        #       still); or
+        #   (b) the OTHER side becomes clearly dominant (= user is genuinely
+        #       on the other side, our "presence" is just transmission).
+        if (
+            self.present
+            and self._presence_session_seconds < self._established_threshold
+            and (
+                self.not_present_for >= self._fast_exit_grace
+                or self._time_since_clearly_dominant >= self._fast_exit_grace
+            )
+        ):
+            reason = (
+                f'no signal for {self.not_present_for}s'
+                if self.not_present_for >= self._fast_exit_grace
+                else f'other side dominant for {self._time_since_clearly_dominant}s'
+            )
+            logger.info(
+                f'Fast exit on {self.side} side: short session '
+                f'({self._presence_session_seconds}s) — {reason}'
+            )
+            self.present = False
+            self.reset()
+            self._presence_session_seconds = 0
+            self._time_since_clearly_dominant = 0
+            self._update_presence_api(False)
+            self._presence_heartbeat_counter = 0
+
+        # Tick the wall-clock session counter LAST so it reflects "seconds
+        # since entry" at the next call's checks.
+        if self.present:
+            self._presence_session_seconds += 1
+
+        # Periodic heartbeat: re-POST the current state even when nothing
+        # changed. detect_presence is called once per second so this fires
+        # every _presence_heartbeat_interval seconds.
+        self._presence_heartbeat_counter += 1
+        if self._presence_heartbeat_counter >= self._presence_heartbeat_interval:
+            self._presence_heartbeat_counter = 0
+            self._update_presence_api(self.present)
 
     def _calculate_vitals(self, signal: np.ndarray, epoch: int, update_breathing=False, update_hrv=False):
         try:

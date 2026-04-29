@@ -1,0 +1,2 @@
+import{j as s}from"./react-vendor-BtN74dLI.js";import{s as r}from"./tokens-DwAtaQku.js";import{ai as o,e as x,w as m}from"./mui-vendor-BCO7Euz1.js";function d({label:e,labelTrailing:a,children:t,sx:i,...n}){return s.jsxs(o,{elevation:0,...n,sx:{...r.glassCard,...i},children:[e&&s.jsxs(x,{sx:{display:"flex",alignItems:"center",justifyContent:"space-between",mb:1.5},children:[s.jsx(m,{sx:{...r.sectionLabel,mb:0},children:e}),a]}),t]})}export{d as G};
+//# sourceMappingURL=GlassCard-ttlnUDs7.js.map

@@ -61,6 +61,15 @@ const scheduleCalibrationJob = (onHour: number, onMinute: number, timeZone: Time
 };
 
 
+// Calibration runs at a fixed time of day, decoupled from the prime time.
+// 18:30 / 19:00 was empirically chosen because it's reliably bed-empty for
+// this user. The presence guard in calibrate_sensor_thresholds.py also
+// aborts if anyone is on the bed at the scheduled time.
+const CALIBRATE_LEFT_HOUR = 18;
+const CALIBRATE_LEFT_MINUTE = 30;
+const CALIBRATE_RIGHT_HOUR = 19;
+const CALIBRATE_RIGHT_MINUTE = 0;
+
 export const schedulePrimingRebootAndCalibration = (settingsData: Settings) => {
   const { timeZone, primePodDaily } = settingsData;
   if (timeZone === null) return;
@@ -73,8 +82,8 @@ export const schedulePrimingRebootAndCalibration = (settingsData: Settings) => {
   dailyRule.tz = timeZone;
 
   scheduleRebootJob(onHour - 1, onMinute, timeZone);
-  scheduleCalibrationJob(onHour, 0, timeZone, 'left');
-  scheduleCalibrationJob(onHour, 30, timeZone, 'right');
+  scheduleCalibrationJob(CALIBRATE_LEFT_HOUR, CALIBRATE_LEFT_MINUTE, timeZone, 'left');
+  scheduleCalibrationJob(CALIBRATE_RIGHT_HOUR, CALIBRATE_RIGHT_MINUTE, timeZone, 'right');
 
   logger.debug(`Scheduling daily prime job at ${primePodDaily.time}`);
   schedule.scheduleJob(`daily-priming-${time}`, dailyRule, async () => {

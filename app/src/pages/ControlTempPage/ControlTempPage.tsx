@@ -24,7 +24,7 @@ import { useTheme } from '@mui/material/styles';
 
 export default function ControlTempPage() {
   const { isError, refetch, data: deviceStatus } = useDeviceStatus();
-  const setDeviceStatus = useControlTempStore(state => state.setDeviceStatus);
+  const syncFromServer = useControlTempStore(state => state.syncFromServer);
   const { data: settings } = useSettings();
   const { isUpdating, side } = useAppStore();
   const theme = useTheme();
@@ -38,8 +38,8 @@ export default function ControlTempPage() {
 
   useEffect(() => {
     if (!deviceStatus) return;
-    setDeviceStatus(deviceStatus);
-  }, [deviceStatus]);
+    syncFromServer(deviceStatus);
+  }, [deviceStatus, syncFromServer]);
 
   return (
     <PageContainer

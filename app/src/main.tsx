@@ -132,27 +132,47 @@ const App = () => {
             <CssBaseline/>
             <GlobalStyles
               styles={ {
-                'html, body': {
-                  overscrollBehavior: 'none', // Prevent rubber-banding
+                // Split html / body styles deliberately. Applying overflow-y:auto
+                // and overscroll-behavior:none to BOTH (the previous setup) made
+                // Android Chrome create two nested scroll containers — single-
+                // finger drag would scroll one and require two fingers for the
+                // other. The fix: html only handles horizontal clipping; body is
+                // the single scroll container with overscroll behaviour.
+                // After multiple failed attempts, the working combination on
+                // Android Chrome (tablet + phone) is:
+                //   - viewport meta WITHOUT user-scalable=no/maximum-scale=1
+                //   - touch-action: pan-y explicit on body
+                //   - NO overscroll-behavior (it intercepts single-finger
+                //     touches on some Android builds)
+                //   - NO background-attachment: fixed (kills smooth scroll
+                //     and can disable touch-scroll altogether on Android)
+                //   - html height: 100% so body's height: auto + scroll
+                //     reference works predictably
+                'html': {
+                  height: '100%',
+                  overflowX: 'hidden',
+                  maxWidth: '100vw',
+                },
+                'body': {
+                  margin: 0,
                   // Pure black base with a barely-perceptible warm tint at the top
                   // — Apple Home / 8 Sleep both use deep black with subtle accent.
                   background: '#000000',
                   backgroundImage:
                     'radial-gradient(ellipse 100% 60% at 50% 0%, rgba(40, 40, 60, 0.35) 0%, transparent 60%)',
-                  backgroundAttachment: 'fixed',
+                  // Was background-attachment: fixed — removed because Android
+                  // Chrome treats fixed-attachment backgrounds as a layout
+                  // hint that disables compositor-driven smooth scroll, and
+                  // in some builds disables touch-scroll on the body entirely.
                   minHeight: '100vh',
-                  // Tabular numerals for cleaner number alignment.
                   fontVariantNumeric: 'tabular-nums',
-                  // Kill horizontal overflow at the root so a single child sneaking
-                  // a few pixels past 100% can't trigger the iPhone's "1mm horizontal
-                  // scroll" bug. (overflow-x:hidden also hides any horiz scrollbar.)
                   overflowX: 'hidden',
-                  // Be explicit about the y-axis. Spec says overflow-y becomes 'auto'
-                  // implicitly when overflow-x is 'hidden', but Android Chrome doesn't
-                  // always honor that — it ends up locking vertical scroll on the
-                  // document. iOS Safari does the right thing either way. Setting
-                  // overflow-y:auto explicitly fixes Android without changing iOS.
                   overflowY: 'auto',
+                  // Explicit pan-y so Android knows single-finger vertical
+                  // drag is for scroll, not for any other gesture.
+                  touchAction: 'pan-y',
+                  // Smooth momentum scroll on iOS WebKit.
+                  WebkitOverflowScrolling: 'touch',
                   maxWidth: '100vw',
                 },
                 // Hide vertical scrollbars but keep scroll functionality, on every

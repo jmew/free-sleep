@@ -13,8 +13,16 @@ import { BASE_PRESETS } from './basePresets.js';
 import eventBus from '../events/eventBus.js';
 // Pod 4+ only: gestures and the 2s cadence are the only path. The Pod 3
 // 60s slow-poll branch was removed alongside the WebSocket initiative.
-const ACTIVE_POLL_MS = 2_000;
-const IDLE_POLL_MS = 10_000;
+//
+// IMPORTANT: this loop is also where physical-tap gestures (quad-tap to
+// toggle the base, double/triple-tap for temperature) are detected — a
+// gesture is "seen" by diffing the franken status snapshot against the
+// previous one. So this cadence is also the worst-case quad-tap latency.
+// We previously throttled to 10s when no WebSocket clients were connected,
+// which made quad-tap take 5-10s when the app wasn't open. Gestures are
+// a physical interaction independent of whether anyone's watching the
+// app, so always poll fast.
+const POLL_MS = 2_000;
 export class FrankenMonitor {
     isRunning;
     deviceStatus;
@@ -145,9 +153,6 @@ export class FrankenMonitor {
             return true;
         return JSON.stringify(this.deviceStatus) !== JSON.stringify(next);
     }
-    currentWaitTime() {
-        return eventBus.clientCount > 0 ? ACTIVE_POLL_MS : IDLE_POLL_MS;
-    }
     async frankenLoop() {
         const franken = await connectFranken();
         this.deviceStatus = await franken.getDeviceStatus(true);
@@ -155,7 +160,7 @@ export class FrankenMonitor {
         while (this.isRunning) {
             try {
                 while (this.isRunning) {
-                    await wait(this.currentWaitTime());
+                    await wait(POLL_MS);
                     if (!this.isRunning)
                         break;
                     const f = await connectFranken();
@@ -183,7 +188,7 @@ export class FrankenMonitor {
             catch (error) {
                 this.markStatus('failed', String(error));
                 logger.error(error instanceof Error ? error.message : String(error), 'franken disconnected');
-                await wait(this.currentWaitTime());
+                await wait(POLL_MS);
             }
         }
         logger.debug('FrankenMonitor loop exited');

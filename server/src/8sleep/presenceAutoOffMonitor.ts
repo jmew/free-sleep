@@ -5,11 +5,22 @@
 // side is in awayMode. The grace period from "user just turned the side on"
 // counts toward the timeout — if the user turns the side on but never lays
 // down, we still shut it off after the timeout elapses.
+//
+// IMPORTANT: skipped while we're inside the user's explicit power schedule's
+// on-window. Without this guard, a noisy partner can starve the dominance
+// arbiter on the lighter sleeper's side (decision_L=False because
+// R-signal >> L-signal), causing the algorithm to treat the user as
+// not-present for >45 min mid-sleep and silently shut the bed off at 3 AM
+// even though they're peacefully asleep. The schedule is the user's
+// declarative intent ("keep this side on until 09:50"); the presence heuristic
+// is only a safety net for naps and forgot-to-turn-off cases outside that
+// window.
 
 import moment from 'moment-timezone';
 import logger from '../logger.js';
+import schedulesDB from '../db/schedules.js';
 import settingsDB from '../db/settings.js';
-import { Side } from '../db/schedulesSchema.js';
+import { DayOfWeek, Schedules, Side, Time } from '../db/schedulesSchema.js';
 import { getPresenceData } from '../routes/metrics/presence.js';
 import { getDeviceStatusCoalesced } from './frankenServer.js';
 import { updateDeviceStatus } from '../routes/deviceStatus/updateDeviceStatus.js';
@@ -26,6 +37,58 @@ const prevIsOn: Record<Side, boolean | null> = { left: null, right: null };
 
 let timer: ReturnType<typeof setInterval> | null = null;
 
+/**
+ * Returns true if `now` falls inside an enabled power schedule's on-window
+ * for the given side. Handles overnight schedules (off-time before noon ⇒
+ * crosses midnight). The off threshold uses isEndTimeNextDay: hour <= 12
+ * means the off fires the next day, matching the rest of the codebase's
+ * convention (see [`utils.ts:isEndTimeNextDay`](../jobs/utils.ts)).
+ */
+function isInActivePowerSchedule(
+  side: Side,
+  now: moment.Moment,
+  schedules: Schedules,
+): boolean {
+  const todayName = now.format('dddd').toLowerCase() as DayOfWeek;
+  const yesterdayName = now.clone().subtract(1, 'day').format('dddd').toLowerCase() as DayOfWeek;
+
+  const today = schedules[side]?.[todayName];
+  const yesterday = schedules[side]?.[yesterdayName];
+
+  const parseAt = (anchor: moment.Moment, hhmm: Time): moment.Moment => {
+    const [h, m] = hhmm.split(':').map(Number);
+    return anchor.clone().startOf('day').hour(h).minute(m).second(0).millisecond(0);
+  };
+
+  const isOvernight = (off: Time): boolean => Number(off.split(':')[0]) <= 12;
+
+  // Yesterday's overnight schedule (e.g., on=21:50 → off=09:50 next day).
+  // Active if now is between yesterday-on and today-off-time.
+  if (yesterday?.power.enabled && isOvernight(yesterday.power.off)) {
+    const yOn = parseAt(now.clone().subtract(1, 'day'), yesterday.power.on);
+    const tOff = parseAt(now, yesterday.power.off);
+    if (now.isSameOrAfter(yOn) && now.isBefore(tOff)) return true;
+  }
+
+  // Today's schedule. Two cases:
+  //   - Same-day (off later than on, e.g. on=14:00 → off=18:00): window is
+  //     [today-on, today-off].
+  //   - Overnight (off before noon, e.g. on=21:50 → off=09:50): window from
+  //     today-on through end-of-today; the wrap into tomorrow morning is
+  //     handled when "tomorrow" rolls over and yesterday-overnight kicks in.
+  if (today?.power.enabled) {
+    const tOn = parseAt(now, today.power.on);
+    if (isOvernight(today.power.off)) {
+      if (now.isSameOrAfter(tOn)) return true;
+    } else {
+      const tOff = parseAt(now, today.power.off);
+      if (now.isSameOrAfter(tOn) && now.isBefore(tOff)) return true;
+    }
+  }
+
+  return false;
+}
+
 async function tick(): Promise<void> {
   let status: Awaited<ReturnType<typeof getDeviceStatusCoalesced>>;
   try {
@@ -36,8 +99,11 @@ async function tick(): Promise<void> {
     return;
   }
   await settingsDB.read();
+  await schedulesDB.read();
   const presence = getPresenceData();
   const now = Date.now();
+  const tz = settingsDB.data.timeZone || 'UTC';
+  const nowMoment = moment.tz(now, tz);
 
   for (const side of ['left', 'right'] as const) {
     const isOn = !!status?.[side]?.isOn;
@@ -52,6 +118,11 @@ async function tick(): Promise<void> {
 
     if (!isOn) continue;
     if (settingsDB.data[side].awayMode) continue;
+
+    // Respect the user's explicit power schedule. If we're inside their
+    // declared on-window (e.g., 21:50 → 09:50 overnight), don't auto-off —
+    // the schedule's own power-off job will handle shutdown at the right time.
+    if (isInActivePowerSchedule(side, nowMoment, schedulesDB.data)) continue;
 
     // If the live stream currently reports present, the user is on the bed
     // right now — don't even consider auto-off. The stream's hysteresis

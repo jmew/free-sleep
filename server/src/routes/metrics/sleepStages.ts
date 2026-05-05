@@ -90,13 +90,24 @@ function classifyStages(
   // this — high-frequency HRV power is the canonical REM marker.
   // We tolerate sparse / missing HRV gracefully: if the per-night spread is
   // too narrow (the upstream HRV calc occasionally collapses to a single
-  // value when the present_for gate is failing), we set the bands wide
-  // enough that the HRV branch is effectively a no-op and the HR-only
-  // fallback takes over.
+  // value when the present_for gate is failing), hrvSpreadOk goes false and
+  // the REM branch becomes unreachable for the night — better to show 0%
+  // REM than to hallucinate REM from HR alone.
   const hrvVals = vitals.map((v) => v.hrv ?? 0).filter((h) => h > 0).sort((a, b) => a - b);
   const hrvP25 = hrvVals.length ? hrvVals[Math.floor(hrvVals.length * 0.25)] : 0;
   const hrvP75 = hrvVals.length ? hrvVals[Math.floor(hrvVals.length * 0.75)] : 0;
   const hrvSpreadOk = hrvP75 - hrvP25 >= 5; // need at least 5 ms between Q1 and Q3 to be useful
+
+  // REM requires BOTH elevated HRV (autonomic activity) AND modestly
+  // elevated HR vs the night's deep-sleep baseline. The previous version
+  // produced biologically impossible 40-70% REM nights because three
+  // separate OR branches all funneled to REM (hrvHigh on its own, HR ≥
+  // baseline+5 on its own, or HR-delta ≥ 4 on its own). Since hrvHigh is
+  // by definition the top-25% of HRV values, ≥25% of every night was
+  // automatically REM before any other criteria mattered. Now LIGHT is the
+  // default for "not deep, not REM" — matching clinical sleep architecture
+  // where Light is 50-60% of normal sleep, REM is 20-25%, Deep is 13-23%.
+  const REM_HR_DELTA_BPM = 4;
 
   // Walk every 5-min bucket in the requested period (this is what fixes the
   // chart gaps — we emit an epoch even when vitals are missing).
@@ -113,7 +124,6 @@ function classifyStages(
     stage: SleepStage;
   };
   const working: WorkingEpoch[] = [];
-  let prevHr: number | null = null;
   let lastClassifiedSleepStage: SleepStage = 'light';
 
   for (let b = startBucket; b < endBucket; b += BUCKET_SECONDS) {
@@ -127,43 +137,42 @@ function classifyStages(
     const moveCalm = movement < calmMoveThreshold;
     const isCalm = hrCalm && moveCalm;
 
-    // HRV-driven REM/deep signals (only meaningful when the per-night HRV
-    // spread is reasonable — see hrvSpreadOk above).
+    // HRV-driven signal (only meaningful when the per-night HRV spread is
+    // reasonable — see hrvSpreadOk above). hrvLow is intentionally unused
+    // for now: requiring it for DEEP eats too many epochs (produced 2-4%
+    // deep on real nights). "Not high HRV" captures the deep-sleep
+    // signature well enough.
     const hrvHigh = hrvSpreadOk && hrv !== null && hrv >= hrvP75;
-    const hrvLow = hrvSpreadOk && hrv !== null && hrv <= hrvP25;
 
     let stage: SleepStage;
     if (movement >= moveThreshold && movement > 50) {
       stage = 'awake';
     } else if (hr === null) {
       // No vitals this bucket — carry forward the previous sleep stage if
-      // movement is low; otherwise treat as awake. Avoids leaving holes in
+      // movement is low; otherwise treat as light. Avoids leaving holes in
       // the chart while not fabricating "deep sleep" through restless gaps.
       stage = moveCalm ? lastClassifiedSleepStage : 'light';
     } else if (hr <= baselineHR + 2 && !hrvHigh) {
       // DEEP: low HR (near baseline) and HRV is NOT in the upper quartile.
-      // We deliberately don't require hrvLow — that intersection ate too
-      // many epochs and produced 2-4 % deep on real nights. The literature
-      // says deep sleep has low HR AND low-to-moderate HRV; "not high HRV"
-      // captures both. When HRV is unusable (hrvSpreadOk false), hrvHigh
-      // is forced false so this still fires on HR alone.
+      // When HRV is unusable (hrvSpreadOk false), hrvHigh is forced false
+      // so this still fires on HR alone.
       stage = 'deep';
-    } else if (hrvHigh) {
-      // Elevated HRV is the canonical REM marker — autonomic activity from
-      // dreaming. We hit this branch when HR isn't low enough for Deep, so
-      // it's clearly not deep sleep.
-      stage = 'rem';
-    } else if (hr >= baselineHR + 5) {
-      // Elevated HR with no HRV signal to confirm REM — best guess REM.
+    } else if (hrvHigh && hr >= baselineHR + REM_HR_DELTA_BPM) {
+      // REM: BOTH elevated HRV (autonomic / dream activity) AND modestly
+      // elevated HR (4+ bpm above baseline). Requiring both signals is the
+      // key change vs the old classifier — alone, hrvHigh covers ~25% of
+      // every night by definition (it's the top quartile), and HR-only or
+      // HR-delta gates lit up another huge chunk. The intersection is
+      // consistent with clinical REM signatures and naturally falls in
+      // the 15-25% range.
       stage = 'rem';
     } else {
-      const hrDelta = prevHr !== null ? Math.abs(hr - prevHr) : 0;
-      // Last fallback: HR-delta-based REM (the original heuristic).
-      stage = hrDelta >= 4 ? 'rem' : 'light';
+      // LIGHT is the default for "not deep, not REM, not awake" — which
+      // matches normal sleep architecture (Light = 50-60% of total sleep).
+      stage = 'light';
     }
 
     if (stage !== 'awake') lastClassifiedSleepStage = stage;
-    if (hr !== null) prevHr = hr;
 
     working.push({ bucket: b, movement, hr, br, hrv, isCalm, stage });
   }

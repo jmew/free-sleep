@@ -167,10 +167,23 @@ def insert_movement_df(movement_df: pd.DataFrame):
         logger.debug(f'Inserting {movement_df.shape[0]} rows into movement table...')
         movement_df['timestamp'] = pd.to_datetime(movement_df['timestamp']).astype(int) // 10 ** 9
 
-        # Upload to SQLite
-        movement_df.to_sql("movement", conn, if_exists='append', index=False)
-
-        logger.debug('Finished inserting rows')
+        # Use INSERT OR IGNORE on the (side, timestamp) UNIQUE index so that
+        # re-running analyze on a day already in the DB silently skips
+        # duplicates instead of bombing out with a UNIQUE constraint error
+        # spam in the logs. Pandas' to_sql(..., if_exists='append') has no
+        # native "ignore conflicts" option, so we go through executemany.
+        cursor = conn.cursor()
+        try:
+            rows = list(movement_df[['side', 'timestamp', 'total_movement']].itertuples(index=False, name=None))
+            cursor.executemany(
+                'INSERT OR IGNORE INTO movement (side, timestamp, total_movement) VALUES (?, ?, ?)',
+                rows,
+            )
+            inserted = cursor.rowcount
+            conn.commit()
+            logger.debug(f'Finished inserting movement rows: {inserted} new, {len(rows) - inserted} duplicates skipped')
+        finally:
+            cursor.close()
 
     except Exception as error:
         logger.error('Failed to insert movement df!')

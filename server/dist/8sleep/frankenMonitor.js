@@ -5,7 +5,7 @@ import memoryDB from '../db/memoryDB.js';
 import { connectFranken, FrankenCommandTimeoutError } from './frankenServer.js';
 import { wait } from './promises.js';
 import { GestureSchema } from '../db/settingsSchema.js';
-import { updateDeviceStatus } from '../routes/deviceStatus/updateDeviceStatus.js';
+import { startSideTemperature, updateDeviceStatus } from '../routes/deviceStatus/updateDeviceStatus.js';
 import { markManualTempChange } from '../jobs/scheduleOverride.js';
 import serverStatus from '../serverStatus.js';
 import { trimixBase } from './trimixBaseControl.js';
@@ -23,6 +23,8 @@ import eventBus from '../events/eventBus.js';
 // a physical interaction independent of whether anyone's watching the
 // app, so always poll fast.
 const POLL_MS = 2_000;
+// Match the app's ±1 levels (82.5°F neutral, 2.75°F per level).
+const TAP_START_TEMPERATURE_F = { doubleTap: 79.75, tripleTap: 85.25 };
 export class FrankenMonitor {
     isRunning;
     deviceStatus;
@@ -57,11 +59,17 @@ export class FrankenMonitor {
             eventBus.emit('service-health', { frankenMonitor: serverStatus.status.frankenMonitor });
         }
     }
-    async processGesture(side, gesture) {
+    async processGesture(side, gesture, status) {
         const behavior = settingsDB.data[side].taps[gesture];
         logger.debug(`[processGesture] side: ${side}, gesture: ${gesture}, type: ${behavior.type}`);
         if (behavior.type === 'temperature') {
-            const currentTemperatureTarget = this.deviceStatus[side].targetTemperatureF;
+            if (!status.isOn && gesture !== 'quadTap') {
+                if (await startSideTemperature(side, TAP_START_TEMPERATURE_F[gesture])) {
+                    await markManualTempChange(side);
+                }
+                return;
+            }
+            const currentTemperatureTarget = status.targetTemperatureF;
             let newTemperatureTargetF;
             const change = behavior.amount;
             if (behavior.change === 'increment') {
@@ -127,15 +135,15 @@ export class FrankenMonitor {
         }
     }
     processGesturesForSide(nextDeviceStatus, side) {
-        try {
-            for (const gesture of GestureSchema.options) {
-                if (nextDeviceStatus[side].taps?.[gesture] !== this?.deviceStatus?.[side].taps?.[gesture]) {
-                    this.processGesture(side, gesture);
-                }
-            }
-        }
-        catch (error) {
-            logger.error(error);
+        const status = nextDeviceStatus[side];
+        for (const gesture of GestureSchema.options) {
+            const previousTap = this.deviceStatus?.[side].taps?.[gesture];
+            const nextTap = status.taps?.[gesture];
+            if (previousTap === undefined || nextTap === undefined || nextTap === 0 || nextTap === previousTap)
+                continue;
+            void this.processGesture(side, gesture, status).catch((error) => {
+                logger.error(`Failed to process ${gesture} on ${side}:`, error);
+            });
         }
     }
     async processGestures(nextDeviceStatus) {

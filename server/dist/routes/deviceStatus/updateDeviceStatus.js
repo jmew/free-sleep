@@ -9,6 +9,16 @@ const calculateLevelFromF = (temperatureF) => {
     const level = (temperatureF - 82.5) / 27.5 * 100;
     return Math.round(level).toString();
 };
+const DEFAULT_ON_DURATION = '43200';
+export const startSideTemperature = async (side, targetTemperatureF) => {
+    await settingsDB.read();
+    if (settingsDB.data[side].awayMode)
+        return false;
+    // Set the target first so a failed temperature command leaves the side off.
+    await executeFunction(side === 'left' ? 'TEMP_LEVEL_LEFT' : 'TEMP_LEVEL_RIGHT', calculateLevelFromF(targetTemperatureF));
+    await executeFunction(side === 'left' ? 'LEFT_TEMP_DURATION' : 'RIGHT_TEMP_DURATION', DEFAULT_ON_DURATION);
+    return true;
+};
 const updateSide = async (side, sideStatus) => {
     await settingsDB.read();
     const settings = settingsDB.data;
@@ -30,7 +40,7 @@ const updateSide = async (side, sideStatus) => {
         logger.debug('One side is in away mode, updating both sides...');
     }
     if (isOn !== undefined) {
-        const onDuration = isOn ? '43200' : '0';
+        const onDuration = isOn ? DEFAULT_ON_DURATION : '0';
         if (updateLeft)
             await executeFunction('LEFT_TEMP_DURATION', onDuration);
         if (updateRight)

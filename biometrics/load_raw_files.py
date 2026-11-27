@@ -98,20 +98,13 @@ def _decode_cbor_file(file_path: str, data: dict, start_time, end_time, side: Si
                 if not decoded_data['type'] in load_raw_types:
                     continue
                 _delete_other_side(decoded_data, side, sensor_count)
+                timestamp = datetime.fromtimestamp(decoded_data['ts'], timezone.utc)
                 if not checked_timespan:
-                    timestamp_start = datetime.fromtimestamp(
-                        decoded_data['ts'],
-                        timezone.utc
-                    )
-                    timestamp_end = timestamp_start + timedelta(minutes=15)
-                    if start_time <= timestamp_start <= end_time:
-                        checked_timespan = True
-                    else:
-                        if start_time <= timestamp_end <= end_time:
-                            checked_timespan = True
-                        else:
-                            raw_data.close()
-                            return
+                    if timestamp > end_time or timestamp + timedelta(minutes=15) < start_time:
+                        return
+                    checked_timespan = True
+                if not start_time <= timestamp < end_time:
+                    continue
 
                 if decoded_data['type'] == 'piezo-dual':
                     load_piezo_row(decoded_data, side)

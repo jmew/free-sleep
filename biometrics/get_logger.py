@@ -80,7 +80,7 @@ def _get_file_handler(data_folder_path: str, name: str):
         filename=f"{folder_path}/{name}.log",
         mode='a',
         maxBytes=10 * 1024 * 1024,  # 10MB max file size
-        backupCount=0,  # No rotation, just truncate when max size is reached
+        backupCount=3 if name == "free-sleep-stream" else 0,
         encoding="utf-8",
     )
     handler.setFormatter(FORMATTER)

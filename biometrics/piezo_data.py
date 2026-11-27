@@ -12,8 +12,9 @@ from get_logger import get_logger
 logger = get_logger()
 
 
-def _calculate_avg(arr: np.ndarray):
-    return np.mean(arr)
+def waveform_range(samples: np.ndarray) -> float:
+    low, high = np.percentile(samples.astype(np.int64, copy=False), [2, 98])
+    return float(high - low)
 
 
 def load_piezo_df(data: Data, side: Side, lower_percentile=2, upper_percentile=98, expected_row_count=None) -> pd.DataFrame:
@@ -23,7 +24,7 @@ def load_piezo_df(data: Data, side: Side, lower_percentile=2, upper_percentile=9
     df['ts'] = pd.to_datetime(df['ts'])
     df.set_index('ts', inplace=True)
 
-    df[f'{side}1_avg'] = df[f'{side}1'].apply(_calculate_avg)
+    df[f'{side}1_avg'] = df[f'{side}1'].apply(np.median)
 
     lower_bound = np.percentile(df[f'{side}1_avg'], lower_percentile)
     upper_bound = np.percentile(df[f'{side}1_avg'], upper_percentile)
@@ -112,7 +113,7 @@ def identify_baseline_period(merged_df: pd.DataFrame, side: str, threshold_range
         # Ensure non-overlapping window
         window_df = merged_df.loc[(merged_df.index >= start_time) & (merged_df.index < end_time)]
 
-        if len(window_df) == 0:
+        if window_df.index.nunique() < empty_minutes * 60 * 0.8:
             continue  # Skip if no data
 
         # Condition 1: Max range values must be < threshold_range

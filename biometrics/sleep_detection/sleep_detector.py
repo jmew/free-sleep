@@ -20,7 +20,9 @@ from db import insert_sleep_records, insert_movement_df
 from sleep_detection.cap_data import load_cap_df, load_baseline, detect_presence_cap
 from get_logger import get_logger
 from load_raw_files import load_raw_files
-from piezo_data import load_piezo_df, detect_presence_piezo
+from piezo_data import waveform_range
+from pathlib import Path
+import json
 
 logger = get_logger()
 
@@ -50,16 +52,8 @@ def _get_presence_intervals(df: pd.DataFrame, side: Side, presence_duration_thre
     start_time = df.index[0]
 
     # Iterate over DataFrame to find state changes
-    for timestamp, row in df.iterrows():
-        # Presence = EITHER piezo OR cap fires. Requiring both (== 2) loses
-        # roughly half of true occupancy: piezo misses still sleep (range
-        # below threshold when only breathing), cap misses motion-only
-        # moments and is noisy enough that the 90%-of-10s rolling check
-        # only fires ~40% of rows during real occupancy. The 1-minute
-        # duration filter, 15-min merge, and 3-hour sleep-period minimum
-        # downstream still suppress short false positives.
-        status = row[occupancy_col] >= 1
-
+    for timestamp, occupied in df[occupancy_col].items():
+        status = bool(occupied)
         if current_status is None:
             current_status = status
             continue
@@ -71,7 +65,7 @@ def _get_presence_intervals(df: pd.DataFrame, side: Side, presence_duration_thre
 
             if current_status:
                 # Only add presence intervals >= 1 minute
-                if duration >= timedelta(minutes=1):
+                if duration >= timedelta(seconds=presence_duration_threshold_seconds):
                     present_intervals.append((start_time, end_time))
             else:
                 not_present_intervals.append((start_time, end_time))
@@ -231,21 +225,19 @@ def detect_sleep(side: Side, start_time: datetime, end_time: datetime, folder_pa
 
     data = load_raw_files(folder_path, start_time, end_time, side, sensor_count=1, raw_data_types=['capSense', 'piezo-dual'])
 
-    piezo_df = load_piezo_df(data, side, expected_row_count=expected_row_count)
-    cap_df = load_cap_df(data, side, expected_row_count=expected_row_count)
-    # Cleanup data
+    # Measure vibration within each waveform. Drift in the per-second DC
+    # average can be large even on a completely empty bed.
+    readings = [(row['ts'], waveform_range(row[f'{side}1']))
+                for row in data['piezo_dual'] if row[f'{side}1'].size]
+    piezo_df = pd.DataFrame(readings, columns=['ts', 'amplitude'])
+    piezo_df['ts'] = pd.to_datetime(piezo_df['ts'])
+    piezo_df = piezo_df.groupby('ts').amplitude.max().to_frame()
+    calibration = Path(logger.folder_path) / f'{side}_piezo_noise.json'
+    threshold = json.loads(calibration.read_text())['threshold'] if calibration.exists() else 100_000
+    piezo_df[f'piezo_{side}1_presence'] = (piezo_df.amplitude >= threshold).rolling('10s').sum() >= 7
+    cap_df = load_cap_df(data, side, expected_row_count=expected_row_count).groupby(level=0).mean()
     del data
     gc.collect()
-
-    detect_presence_piezo(
-        piezo_df,
-        side,
-        rolling_seconds=10,
-        threshold_percent=0.70,
-        range_threshold=20_000,
-        range_rolling_seconds=10,
-        clean=True
-    )
 
     merged_df = piezo_df.merge(cap_df, on='ts', how='inner')
     merged_df.drop_duplicates(inplace=True)
@@ -269,8 +261,16 @@ def detect_sleep(side: Side, start_time: datetime, end_time: datetime, folder_pa
         clean=False
     )
 
-    merged_df[f'final_{side}_occupied'] = merged_df[f'piezo_{side}1_presence'] + merged_df[f'cap_{side}_occupied']
-    sleep_records = build_sleep_records(merged_df, side, max_gap_in_minutes=15)
+    if merged_df.empty:
+        raise ValueError(f"No overlapping piezo and capacitance samples for {side}")
+    merged_df.sort_index(inplace=True)
+    vibration = merged_df[f'piezo_{side}1_presence']
+    recent_vibration = vibration.rolling('5min').max().astype(bool)
+    merged_df[f'final_{side}_occupied'] = vibration | (recent_vibration & merged_df[f'cap_{side}_occupied'].astype(bool))
+    gaps = merged_df.index.to_series().diff() > timedelta(minutes=1)
+    sleep_records = []
+    for _, segment in merged_df.groupby(gaps.cumsum()):
+        sleep_records.extend(build_sleep_records(segment, side, max_gap_in_minutes=15))
     if len(sleep_records) == 0:
         logger.warning(f'No sleep periods found for {side} side! {start_time} -> {end_time} ')
     else:

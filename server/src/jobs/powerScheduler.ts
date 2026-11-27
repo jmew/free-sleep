@@ -57,14 +57,8 @@ export const schedulePowerOn = (settingsData: Settings, side: Side, day: DayOfWe
 // without an active heating schedule) never had sleep records generated
 // for them, even though the biometrics stream was collecting their data.
 //
-// Now sleep analysis is independent: one daily job per side, gated only
-// by the system-wide `biometrics.enabled` toggle. The 12:00 default is
-// late enough to comfortably cover users who sleep until 11-11:30 AM,
-// AND we now have a RAW-file archive (scripts/archive-raw.sh +
-// /etc/systemd/system/free-sleep-archive-raw.timer) that hardlinks
-// piezo files before frankenfirmware's ~75-min rolling-buffer truncation,
-// so the analyze always sees the previous 12 h regardless of when it
-// runs. Tweak these constants if both sleepers routinely wake later.
+// Both sides analyze the same local evening-to-noon window. Stagger the
+// jobs to reduce peak memory usage when reading the raw archive.
 const SLEEP_ANALYSIS_HOUR = 12;
 const SLEEP_ANALYSIS_MINUTE = 0;
 
@@ -74,9 +68,9 @@ export const scheduleSleepAnalysis = (settingsData: Settings, side: Side) => {
 
   const dailyRule = new schedule.RecurrenceRule();
   dailyRule.hour = SLEEP_ANALYSIS_HOUR;
-  dailyRule.minute = SLEEP_ANALYSIS_MINUTE;
+  dailyRule.minute = side === 'right' ? 10 : SLEEP_ANALYSIS_MINUTE;
   dailyRule.tz = settingsData.timeZone;
-  const time = `${String(SLEEP_ANALYSIS_HOUR).padStart(2, '0')}:${String(SLEEP_ANALYSIS_MINUTE).padStart(2, '0')}`;
+  const time = `${String(SLEEP_ANALYSIS_HOUR).padStart(2, '0')}:${String(dailyRule.minute).padStart(2, '0')}`;
 
   logger.debug(`Scheduling daily sleep-analyzer job for ${side} at ${time}`);
   schedule.scheduleJob(`daily-analyze-sleep-${side}`, dailyRule, async () => {
@@ -100,7 +94,9 @@ export const scheduleSleepAnalysis = (settingsData: Settings, side: Side) => {
     await memoryDB.write();
 
     logger.info(`Executing daily sleep analyzer job for ${side}`);
-    executeAnalyzeSleep(side, moment().subtract(12, 'hours').toISOString(), moment().add(1, 'hours').toISOString());
+    const noon = moment.tz(settingsData.timeZone!).startOf('day').hour(12);
+    const evening = noon.clone().subtract(1, 'day').hour(18);
+    executeAnalyzeSleep(side, evening.toISOString(), noon.toISOString());
   });
 };
 

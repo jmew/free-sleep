@@ -19,6 +19,8 @@ import os
 import gc
 import json
 import urllib.request
+from pathlib import Path
+import numpy as np
 from argparse import Namespace, ArgumentParser
 import traceback
 from typing import Union
@@ -38,7 +40,7 @@ logger = get_logger('calibrate-sensor')
 
 from data_types import *
 from load_raw_files import load_raw_files
-from piezo_data import load_piezo_df, detect_presence_piezo, identify_baseline_period
+from piezo_data import load_piezo_df, detect_presence_piezo, identify_baseline_period, waveform_range
 from cap_data import load_cap_df, create_cap_baseline_from_cap_df, save_baseline
 from resource_usage import get_memory_usage_unix, get_available_memory_mb
 from biometrics_helpers import validate_datetime_utc
@@ -69,15 +71,48 @@ def _parse_args() -> Union[Namespace, None]:
         help="End time in UTC format 'YYYY-MM-DD HH:MM:SS'."
     )
 
+    parser.add_argument("--confirmed-empty", action="store_true",
+                        help="Use a known empty 10–30 minute window to calibrate piezo noise and capacitance.")
+
     # Parse arguments
     args = parser.parse_args()
     if args.start_time is None or args.end_time is None or args.side is None:
+        if args.confirmed_empty:
+            parser.error("--confirmed-empty requires side, start_time and end_time")
         return None
     # Validate that start_time is before end_time
     if args.start_time >= args.end_time:
         raise ValueError("--start_time must be earlier than --end_time")
 
     return args
+
+
+def calibrate_confirmed_empty(side, start_time, end_time, folder_path):
+    seconds = (end_time - start_time).total_seconds()
+    if not 600 <= seconds <= 1800:
+        raise ValueError("Choose a confirmed empty window of 10 to 30 minutes")
+    data = load_raw_files(folder_path, start_time, end_time, side, 1, ['capSense', 'piezo-dual'])
+    ranges = {row['ts']: waveform_range(row[f'{side}1']) for row in data['piezo_dual']
+              if row[f'{side}1'].size}
+    caps = {row['ts']: row[side] for row in data['cap_senses'] if row['ts'] in ranges}
+    if len(caps) < seconds * 0.85:
+        raise ValueError("Insufficient paired sensor readings")
+    samples = np.array([ranges[t] for t in sorted(ranges)])
+    train, holdout = np.array_split(samples, 2)
+    noise = float(np.percentile(train, 99))
+    threshold = max(20_000, int(4 * noise))
+    if threshold > 100_000 or np.mean(holdout >= threshold) >= 0.01:
+        raise ValueError("Inconsistent empty-bed readings; keeping previous calibration")
+    baseline = {}
+    for channel in ('out', 'cen', 'in'):
+        values = [reading[channel] for reading in caps.values()]
+        baseline[f'{side}_{channel}'] = {'mean': float(np.median(values)),
+                                         'std': max(5, float(np.std(values)))}
+    save_baseline(side, baseline)
+    path = Path(logger.folder_path) / f'{side}_piezo_noise.json'
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps({'threshold': threshold, 'empty_p99': noise}))
+    temporary.replace(path)
 
 
 def calibrate_sensor_thresholds(side: Side, start_time: datetime, end_time: datetime, folder_path: str):
@@ -119,6 +154,8 @@ def calibrate_sensor_thresholds(side: Side, start_time: datetime, end_time: date
 
     # Create baseline
     baseline_start_time, baseline_end_time = identify_baseline_period(merged_df, side, threshold_range=10_000, empty_minutes=5)
+    if baseline_start_time is None:
+        raise ValueError("No complete quiet calibration window found")
     cap_baseline = create_cap_baseline_from_cap_df(merged_df, baseline_start_time, baseline_end_time, side, min_std=5)
     save_baseline(side, cap_baseline)
 
@@ -204,7 +241,7 @@ if __name__ == "__main__":
             date = '2025-01-20'
             FOLDER_PATH = f'/Users/ds/main/8sleep_biometrics/data/people/david/raw/loaded/{date}/'
             args = Namespace(
-                side="right",
+                side="right", confirmed_empty=False,
                 start_time=datetime.strptime(f'{date} 07:00:00', '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc),
                 end_time=datetime.strptime(f'{date} 15:00:00', '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc),
             )
@@ -216,7 +253,8 @@ if __name__ == "__main__":
         else:
             job_key = f"calibrate{args.side.capitalize()}"
             update_health(job_key, 'started', '')
-            calibrate_sensor_thresholds(
+            calibrate = calibrate_confirmed_empty if args.confirmed_empty else calibrate_sensor_thresholds
+            calibrate(
                 args.side,
                 args.start_time,
                 args.end_time,

@@ -240,7 +240,6 @@ def detect_sleep(side: Side, start_time: datetime, end_time: datetime, folder_pa
     gc.collect()
 
     merged_df = piezo_df.merge(cap_df, on='ts', how='inner')
-    merged_df.drop_duplicates(inplace=True)
 
     # Free up memory from old dfs
     piezo_df.drop(piezo_df.index, inplace=True)

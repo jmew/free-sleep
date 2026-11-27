@@ -73,15 +73,10 @@ class _PresenceCoordinator:
     _latest = {'left': 0.0, 'right': 0.0}
 
     @classmethod
-    def report(cls, side: str, signal_range: float) -> dict:
-        """Update this side's range and return the decision for both sides."""
-        cls._latest[side] = signal_range
-        return cls._decide()
-
-    @classmethod
-    def _decide(cls) -> dict:
-        L = cls._latest['left']
-        R = cls._latest['right']
+    def report_pair(cls, left: float, right: float) -> dict:
+        """Compare sensor ranges from the same sampling window."""
+        cls._latest = {'left': left, 'right': right}
+        L, R = left, right
 
         left_above = L >= cls.NOISE_THRESHOLD
         right_above = R >= cls.NOISE_THRESHOLD
@@ -290,23 +285,14 @@ class BiometricProcessor:
         p2, p98 = np.percentile(s, [2, 98])
         return float(p98 - p2)
 
-    def detect_presence(self, signal1: np.ndarray, signal2: Union[None, np.ndarray] = None):
-        # Each side has TWO physical piezos (head + foot of that half of the
-        # bed). Until now presence detection only looked at signal1, throwing
-        # away half the available information. Use the MAX of the two — a
-        # person on the side compresses both piezos directly, so taking the
-        # max picks up activity even if the person's body is closer to one
-        # piezo than the other.
-        r1 = self._range_p98_p2(signal1)
-        r2 = self._range_p98_p2(signal2) if signal2 is not None else 0.0
-        signal_range = max(r1, r2)
+    @classmethod
+    def sensor_ranges(cls, signal1, signal2):
+        return cls._range_p98_p2(signal1), cls._range_p98_p2(signal2)
 
+    def detect_presence(self, ranges, decision):
+        r1, r2 = ranges
+        signal_range = max(ranges)
         self._recent_ranges.append(signal_range)
-
-        # Cross-side arbitration: report our range to the coordinator and let
-        # it tell us whether THIS side is actually occupied (vs just picking
-        # up mechanical transmission from the other side).
-        decision = _PresenceCoordinator.report(self.side, signal_range)
         other_side = 'right' if self.side == 'left' else 'left'
 
         # Three mutually exclusive outcomes from the coordinator:

@@ -17,7 +17,7 @@ with new sensor data to continuously track and analyze biometric trends.
 """
 import sys
 from get_logger import get_logger
-from biometric_processor import BiometricProcessor
+from biometric_processor import BiometricProcessor, _PresenceCoordinator
 from buffer import Buffer
 from data_types import *
 import numpy as np
@@ -51,12 +51,11 @@ class StreamProcessor:
         left2_signal=None,
         right2_signal=None,
     ):
-        # Pass both piezos per side so detect_presence can use the max of
-        # head + foot piezo — improves coverage when a person isn't centred
-        # over a single sensor and gives the coordinator more signal to
-        # distinguish real occupancy from asymmetric transmission.
-        self.left_processor.detect_presence(left1_signal, left2_signal)
-        self.right_processor.detect_presence(right1_signal, right2_signal)
+        left = self.left_processor.sensor_ranges(left1_signal, left2_signal)
+        right = self.right_processor.sensor_ranges(right1_signal, right2_signal)
+        decision = _PresenceCoordinator.report_pair(max(left), max(right))
+        self.left_processor.detect_presence(left, decision)
+        self.right_processor.detect_presence(right, decision)
 
     def can_calculate_breath_rate(self):
         return (

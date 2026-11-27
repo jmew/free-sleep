@@ -77,7 +77,7 @@ export default function VitalsSummaryCard({ startTime, endTime }: BiometricsSumm
           <Tile title="Avg HR"     value={ vitalsSummary.avgHeartRate } unit="bpm" />
           <Tile title="Min HR"     value={ vitalsSummary.minHeartRate } unit="bpm" />
           <Tile title="Max HR"     value={ vitalsSummary.maxHeartRate } unit="bpm" />
-          <Tile title="HRV"        value={ vitalsSummary.avgHRV }       unit="ms" />
+          <Tile title="SDNN"        value={ vitalsSummary.avgHRV }       unit="ms" />
           <Tile title="Breath"     value={ vitalsSummary.avgBreathingRate } unit="brpm" />
         </Box>
       ) }

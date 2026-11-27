@@ -193,6 +193,7 @@ export default function SleepPage() {
                     sevenDayAvg={ weekVitalsSummary?.avgBreathingRate }
                   />
                 </ErrorBoundary>
+                <ErrorBoundary componentName="RMSSD chart"><VitalsLineChart vitalsRecords={ vitalsRecords } metric="rmssd" /></ErrorBoundary>
                 <ErrorBoundary componentName="HRV chart">
                   <VitalsLineChart
                     vitalsRecords={ vitalsRecords }

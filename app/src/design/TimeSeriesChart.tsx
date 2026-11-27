@@ -5,7 +5,7 @@ import { palette } from './tokens';
 
 export type TimeSeriesPoint = {
   timestamp: Date;
-  value: number;
+  value: number | null;
 };
 
 type TimeSeriesChartProps = {
@@ -45,7 +45,7 @@ export default function TimeSeriesChart({
 
   // Compute Y-axis range: pad slightly above/below data, but include the
   // target band if one is set so it's always visible.
-  const values = data.map((p) => p.value).filter((v) => Number.isFinite(v));
+  const values = data.map((p) => p.value).filter((v): v is number => v !== null && Number.isFinite(v));
   const dataMin = values.length ? Math.min(...values) : 0;
   const dataMax = values.length ? Math.max(...values) : 1;
   const yMin = targetRange ? Math.min(dataMin, targetRange[0]) : dataMin;

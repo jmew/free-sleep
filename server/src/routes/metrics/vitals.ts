@@ -76,7 +76,7 @@ router.get('/vitals/summary', async (req: Request<object, object, object, Vitals
   const avgBreathingRate = await prisma.vitals.aggregate({
     where: {
       ...query,
-      breathing_rate: { not: 0, lte: 20, gte: 5 }, // Exclude zero values
+      breathing_rate: { gt: 0 }, // Exclude zero values
     },
     _avg: { breathing_rate: true },
   });
@@ -85,7 +85,7 @@ router.get('/vitals/summary', async (req: Request<object, object, object, Vitals
   const avgHRV = await prisma.vitals.aggregate({
     where: {
       ...query,
-      hrv: { not: 0, lte: 120, gte: 30 }, // Exclude zero values
+      hrv: { gt: 0 }, // Exclude zero values
     },
     _avg: { hrv: true },
   });

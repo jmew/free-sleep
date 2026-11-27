@@ -1,7 +1,7 @@
 import axios from './api';
 import { useQuery } from '@tanstack/react-query';
 
-export type SleepStage = 'awake' | 'rem' | 'light' | 'deep';
+export type SleepStage = 'awake' | 'rem' | 'light' | 'deep' | 'unknown';
 
 export type StageEpoch = {
   startUnix: number;

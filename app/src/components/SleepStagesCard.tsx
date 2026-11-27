@@ -19,6 +19,7 @@ const STAGE_COLOR: Record<SleepStage, string> = {
   awake: '#e8eaed',  // near-white "interruption" segments
   rem:   '#7da6ff',  // light blue
   light: '#3b6cd6',  // medium blue
+  unknown: '#767676',
   deep:  '#1f4ed8',  // deep blue
 };
 // Y-axis position for each stage (0 = top, 1 = bottom)
@@ -26,16 +27,18 @@ const STAGE_Y: Record<SleepStage, number> = {
   awake: 0.10,
   rem:   0.34,
   light: 0.58,
+  unknown: 0.98,
   deep:  0.82,
 };
 const STAGE_LABEL: Record<SleepStage, string> = {
   awake: 'Sleep interruptions',
   rem:   'REM',
   light: 'Light',
+  unknown: 'Unmeasured',
   deep:  'Deep',
 };
 
-const TARGET_HOURS = [6.5, 9];   // "in range" band displayed under Time slept
+const TARGET_HOURS = [6.5, 9];   // "in range" band displayed under Estimated time asleep
 const TARGET_GREEN = '#22c55e';
 const TARGET_YELLOW = '#eab308';
 const TARGET_RED = '#ef4444';
@@ -242,7 +245,7 @@ export default function SleepStagesCard({ startTime, endTime }: Props) {
   const periodStart = moment(startTime).unix();
   const periodEnd = moment(endTime).unix();
 
-  // "Time slept" = total time in the period MINUS the time classified as
+  // "Estimated time asleep" = total time in the period MINUS the time classified as
   // awake. So lying in bed scrolling on the phone after the alarm doesn't
   // count toward your sleep total. Falls back to period length when stage
   // data is missing.
@@ -250,14 +253,14 @@ export default function SleepStagesCard({ startTime, endTime }: Props) {
     const period = Math.max(0, periodEnd - periodStart);
     if (!data) return period;
     const awake = data.totals.awake || 0;
-    return Math.max(0, period - awake);
+    return Math.max(0, period - awake - (data.totals.unknown || 0));
   }, [data, periodEnd, periodStart]);
   const totalDuration = formatHM(totalDurationSeconds);
   const totalHours = totalDurationSeconds / 3600;
   const inRange = totalHours >= TARGET_HOURS[0] && totalHours <= TARGET_HOURS[1];
 
   return (
-    <GlassCard label="SLEEP">
+    <GlassCard label="ESTIMATED SLEEP · EXPERIMENTAL STAGES">
       { isFetching && <CircularProgress sx={ { display: 'block', mx: 'auto', my: 4 } } /> }
 
       { !isFetching && data && data.epochs.length > 0 && (
@@ -310,6 +313,7 @@ export default function SleepStagesCard({ startTime, endTime }: Props) {
               mb: 2,
             } }
           >
+            <LegendItem color={ STAGE_COLOR.unknown } label={ `Unmeasured · ${formatHM(data.totals.unknown || 0)}` } />
             <LegendItem color={ STAGE_COLOR.awake } label={ STAGE_LABEL.awake } />
             <LegendItem color={ STAGE_COLOR.rem }   label={ STAGE_LABEL.rem } />
             <LegendItem color={ STAGE_COLOR.light } label={ STAGE_LABEL.light } />
@@ -318,7 +322,7 @@ export default function SleepStagesCard({ startTime, endTime }: Props) {
 
           <Box sx={ { display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 } }>
             <Typography sx={ { fontSize: '1.05rem', fontWeight: 600, color: palette.text.primary } }>
-              Time slept
+              Estimated time asleep
             </Typography>
             <Box sx={ { textAlign: 'right' } }>
               <Box sx={ { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.75 } }>

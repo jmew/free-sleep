@@ -27,6 +27,7 @@ from collections import deque
 import urllib.request
 import urllib.error
 
+from respiration import estimate_breath_rate
 from get_logger import get_logger
 from heart.exceptions import BadSignalWarning
 from vitals.run_data_types import RuntimeParams
@@ -144,7 +145,7 @@ class BiometricProcessor:
         self.api_port = api_port
         self.presence_api_url = f'http://{api_host}:{api_port}/api/metrics/presence'
 
-        self.heart_rate_window_seconds = 3
+        self.heart_rate_window_seconds = 8
         self.breath_rate_window_seconds = 30
         self.breath_rate_insertion_frequency = 10
 
@@ -181,8 +182,6 @@ class BiometricProcessor:
         # at the cost of detecting "person actually got out of bed" 3 min
         # later instead of 30s later.
         self.no_presence_tolerance = 180
-        self.breathing_rate = 0
-        self.hrv = 0
         self.not_present_for = 0
         self.present_for = 0
         # Re-POST the current presence state every N seconds even when nothing
@@ -216,6 +215,9 @@ class BiometricProcessor:
         self.debug_measurements: List[Measurement] = []
 
     def init_tracking(self):
+        self.hrv = self.breathing_rate = self.rmssd = None
+        self.hrv_at = self.breath_at = None
+        self.accepted_intervals = self.interval_coverage = None
         # Running metrics
         self.heart_rates:  Deque[float] = deque([], maxlen=self.moving_avg_size)
         self.breath_rates:  Deque[float] = deque([], maxlen=6)
@@ -234,6 +236,7 @@ class BiometricProcessor:
 
     def reset(self):
         self.iteration_count = 0
+        self.combined_measurements.clear()
         self.init_tracking()
 
     def _update_presence_api(self, is_present: bool):
@@ -437,7 +440,7 @@ class BiometricProcessor:
             self._presence_heartbeat_counter = 0
             self._update_presence_api(self.present)
 
-    def _calculate_vitals(self, signal: np.ndarray, epoch: int, update_breathing=False, update_hrv=False):
+    def _calculate_vitals(self, signal: np.ndarray, epoch: int, update_hrv=False):
         try:
             # Remove outliers from signal
             data = interpolate_outliers_in_wave(
@@ -464,25 +467,17 @@ class BiometricProcessor:
                 bpmmin=40,
                 bpmmax=90,
                 windowsize=self.window_size,
-                calculate_breathing=update_breathing,
+                calculate_breathing=False,
             )
-            if update_breathing:
-                breathing_rate = measurement.get('breathingrate', 0) * 60
-                if (8 <= breathing_rate <= 20) and not np.isnan(breathing_rate):
-                    self.breath_rates.append(breathing_rate)
-                    breathing_rate = sum(self.breath_rates) / len(self.breath_rates)
-                    if not np.isnan(breathing_rate):
-                        self.breathing_rate = breathing_rate
-
             if update_hrv:
-                hrv = measurement['sdnn']
-                if (8 <= hrv <= 200) and not np.isnan(hrv):
-                    self.hrv_rates.append(hrv)
-                    hrv = sum(self.hrv_rates) / len(self.hrv_rates)
-
-                    if not np.isnan(hrv):
-                        self.hrv = hrv
-
+                intervals = working_data['RR_list_cor']
+                differences = working_data['RR_diff']
+                self.accepted_intervals = len(intervals)
+                self.interval_coverage = min(1.0, float(np.sum(intervals)) / (len(signal) * 2))
+                if self.interval_coverage >= 0.8 and len(differences) >= 60:
+                    self.hrv = float(measurement['sdnn'])
+                    self.rmssd = float(np.sqrt(np.mean(np.square(differences))))
+                return
 
             if self.is_valid(measurement):
                 return {
@@ -584,28 +579,23 @@ class BiometricProcessor:
         self.iteration_count += 1
 
         # Insert moving average heart rate to DB
-        if self.iteration_count % self.insertion_frequency == 0 and len(self.combined_measurements) > 0:
-            heart_rate = np.mean(list(self.heart_rates)[self.rolling_average_size * -1:])
-            # Convert last heart rate to average
-            self.combined_measurements[-1]['heart_rate'] = heart_rate
-            if not self.debug:
-                insert_vitals(self.combined_measurements[-1])
+        if self.iteration_count % self.insertion_frequency == 0:
+            recent = [m['heart_rate'] for m in self.combined_measurements
+                      if 0 <= self.epoch - m['timestamp'] < self.rolling_average_size]
+            fresh_hrv = self.hrv_at is not None and 0 <= self.epoch - self.hrv_at <= self.hrv_insertion_frequency
+            fresh_breath = self.breath_at is not None and 0 <= self.epoch - self.breath_at <= self.breath_rate_insertion_frequency
+            row = dict(side=self.side, timestamp=self.epoch,
+                       heart_rate=float(np.median(recent)) if recent else None,
+                       hrv=self.hrv if fresh_hrv else None, rmssd=self.rmssd if fresh_hrv else None,
+                       hrv_at=self.hrv_at if fresh_hrv else None,
+                       accepted_intervals=self.accepted_intervals if fresh_hrv else None,
+                       interval_coverage=self.interval_coverage if fresh_hrv else None,
+                       breathing_rate=self.breathing_rate if fresh_breath else None,
+                       breath_at=self.breath_at if fresh_breath else None)
+            if self.debug:
+                self.debug_measurements.append(row)
             else:
-                last_combined_measurement = list(self.combined_measurements)[-1]
-                ts = datetime.utcfromtimestamp(last_combined_measurement['timestamp']).isoformat()
-                debug_measurement = {
-                    **self.combined_measurements[-1],
-                    'last_combined_measurement': ts,
-                    'current_ts': datetime.utcfromtimestamp(self.epoch).isoformat(),
-                    'heart_rate': heart_rate,
-                    'last_heart_rates': list(self.heart_rates)[-25:],
-                    'hr_moving_avg': self.hr_moving_avg,
-                    'lower_bound': self.lower_bound,
-                    'upper_bound': self.upper_bound,
-                    'hr_std_2': self.hr_std_2,
-                    'length': len(self.heart_rates),
-                }
-                self.debug_measurements.append(debug_measurement)
+                insert_vitals(row)
 
         # Calculate boundaries for calculations
         if len(self.heart_rates) >= self.moving_avg_size:
@@ -625,8 +615,11 @@ class BiometricProcessor:
                 self.hr_std_2 = self.hr_std_range[1]
 
     def calculate_breath_rate(self, signal1: np.ndarray, epoch: int):
-        self._calculate_vitals(signal1, epoch, update_breathing=True)
+        self.breath_at = epoch
+        self.breathing_rate = estimate_breath_rate(signal1)
 
 
     def calculate_hrv(self, signal1: np.ndarray, epoch: int):
+        self.hrv_at = epoch
+        self.hrv = self.rmssd = self.accepted_intervals = self.interval_coverage = None
         self._calculate_vitals(signal1, epoch, update_hrv=True)

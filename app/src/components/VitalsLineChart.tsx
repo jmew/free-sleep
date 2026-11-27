@@ -4,7 +4,7 @@ import { VitalsRecord } from '@api/vitals.ts';
 import MetricChartCard from '@design/MetricChartCard';
 import TimeSeriesChart, { TimeSeriesPoint } from '@design/TimeSeriesChart';
 
-type Metric = 'heart_rate' | 'hrv' | 'breathing_rate';
+type Metric = 'heart_rate' | 'hrv' | 'rmssd' | 'breathing_rate';
 type VitalsLineChartProps = {
   vitalsRecords?: VitalsRecord[];
   metric: Metric;
@@ -25,8 +25,9 @@ const METRIC_CONFIG: Record<
     targetRange?: [number, number];
   }
 > = {
-  heart_rate:    { title: 'HEART RATE',     primaryLabel: 'AT REST', unit: 'bpm' },
-  hrv:           { title: 'HRV',            primaryLabel: 'TONIGHT', unit: 'ms',   targetRange: [50, 100] },
+  heart_rate:    { title: 'HEART RATE',     primaryLabel: 'AVERAGE', unit: 'bpm' },
+  hrv:           { title: 'HRV · SDNN',            primaryLabel: 'TONIGHT', unit: 'ms', },
+  rmssd: {title:'HRV · RMSSD', primaryLabel:'TONIGHT', unit:'ms'},
   breathing_rate:{ title: 'BREATHING RATE', primaryLabel: 'TONIGHT', unit: 'brpm', targetRange: [12, 20] },
 };
 
@@ -34,7 +35,8 @@ const METRIC_CONFIG: Record<
 // buckets and emit the mean of each bucket (using the bucket's middle
 // timestamp). Smoother trend than naive every-Nth-point decimation, since
 // it averages out jitter rather than just dropping in-between samples.
-function bucketAggregate(arr: TimeSeriesPoint[], maxPoints: number): TimeSeriesPoint[] {
+type MeasuredPoint = {timestamp: Date; value: number};
+function bucketAggregate(arr: MeasuredPoint[], maxPoints: number): TimeSeriesPoint[] {
   if (arr.length <= maxPoints) return arr;
   const bucketSize = Math.ceil(arr.length / maxPoints);
   const out: TimeSeriesPoint[] = [];
@@ -67,16 +69,34 @@ export default function VitalsLineChart({ vitalsRecords, metric, sevenDayAvg }: 
     // for visible markers. End result felt cluttered (60–80 dots packed on
     // the line). Bucket-aggregate to ~50 points = roughly half the visible
     // density of the previous version, with smoother trend lines.
-    const downsampled = bucketAggregate(cleaned, 50);
+    const downsampled: TimeSeriesPoint[] = [];
+    let segment: MeasuredPoint[] = [];
+    const flush = () => {
+      if (segment.length) downsampled.push(...bucketAggregate(segment, Math.max(2, Math.ceil(50 * segment.length / cleaned.length))));
+      segment = [];
+    };
+    for (const r of vitalsRecords) {
+      const timestamp = new Date(r.timestamp);
+      const value = r[metric];
+      const previous = segment[segment.length - 1];
+      if (previous && timestamp.getTime() - previous.timestamp.getTime() > 90000) {
+        flush();
+        downsampled.push({timestamp: new Date(previous.timestamp.getTime()+60000), value:null});
+      }
+      if (value == null || value <= 0) {
+        flush();
+        downsampled.push({timestamp, value:null});
+      } else {
+        segment.push({timestamp, value});
+      }
+    }
+    flush();
     const values = cleaned.map((p) => p.value);
 
     // For "AT REST" on heart rate, show the minimum (resting HR is typically
     // the lowest sustained reading during sleep). For other metrics, show
     // the average.
-    const primary =
-      metric === 'heart_rate'
-        ? Math.round(Math.min(...values))
-        : Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+    const primary = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
 
     return {
       points: downsampled,

@@ -66,21 +66,13 @@ def insert_vitals(data: dict):
     cursor = conn.cursor()
 
     sql = """
-    INSERT INTO vitals (side, timestamp, heart_rate, hrv, breathing_rate)
-    VALUES (:side, :timestamp, :heart_rate, :hrv, :breathing_rate)
-    ON CONFLICT(side, timestamp) DO NOTHING;
+    INSERT INTO vitals (side,timestamp,heart_rate,hrv,breathing_rate,rmssd,hrv_at,
+                        breath_at,accepted_intervals,interval_coverage)
+    VALUES (:side,:timestamp,:heart_rate,:hrv,:breathing_rate,:rmssd,:hrv_at,
+            :breath_at,:accepted_intervals,:interval_coverage)
+    ON CONFLICT(side,timestamp) DO NOTHING
     """
-    if np.isnan(data['hrv']):
-        data['hrv'] = 0
-    else:
-        data['hrv'] = math.floor(data['hrv'])
-
-    if np.isnan(data['breathing_rate']):
-        data['breathing_rate'] = 0
-    else:
-        data['breathing_rate'] = math.floor(data['breathing_rate'])
-
-    data['heart_rate'] = math.floor(data['heart_rate'])
+    data = {**dict.fromkeys(('rmssd','hrv_at','breath_at','accepted_intervals','interval_coverage')), **data}
     logger.debug('Inserting vitals record...')
     try:
         cursor.execute(sql, data)

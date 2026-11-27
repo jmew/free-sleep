@@ -152,8 +152,8 @@ def _identify_sleep_intervals(
             if gap >= real_exit_min:
                 exit_count += 1
         else:
-            # Only add sleep interval if it's greater than 3 hours
-            if total_sleep_time > timedelta(hours=3):
+            # Only add sleep interval if it's at least 30 minutes
+            if total_sleep_time >= timedelta(minutes=30):
                 sleep_intervals.append({
                     'entered_bed_at': current_start,
                     'left_bed_at': current_end,
@@ -166,8 +166,8 @@ def _identify_sleep_intervals(
             total_sleep_time = current_end - current_start
             exit_count = 0
 
-    # Ensure the last interval is added only if it meets the 3-hour requirement
-    if total_sleep_time > timedelta(hours=3):
+    # Ensure the last interval is added only if it meets the minimum occupied duration
+    if total_sleep_time >= timedelta(minutes=30):
         sleep_intervals.append({
             'entered_bed_at': current_start,
             'left_bed_at': current_end,

@@ -34,7 +34,7 @@ export default function LastNightChip() {
     !!last,
   );
 
-  if (!last || !score) return null;
+  if (!last || !score || score.score === null) return null;
 
   return (
     <Box display="flex" justifyContent="center" sx={ { width: '100%' } }>

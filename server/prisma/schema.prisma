@@ -31,6 +31,11 @@ model vitals {
   timestamp      Int // 5-minute interval start (Unix timestamp)
   heart_rate     Float? // Averaged over 5 minutes
   hrv            Float? // Averaged over 5 minutes
+  rmssd Float?
+  hrv_at Int?
+  breath_at Int?
+  accepted_intervals Int?
+  interval_coverage Float?
   breathing_rate Float? // Averaged over 5 minutes
 
   @@unique([side, timestamp]) // Ensure no duplicate intervals

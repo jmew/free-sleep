@@ -2,42 +2,22 @@ import express from 'express';
 import moment from 'moment-timezone';
 import { prisma } from '../../db/prisma.js';
 const router = express.Router();
-// Heuristic sleep-stage classifier with three improvements over the original
-// per-epoch version:
-//
-//   1. Dense epochs covering the FULL requested period — one 5-min epoch per
-//      bucket from periodStart to periodEnd. Buckets without a vitals record
-//      use carry-forward (or movement-only) classification. Fixes the visible
-//      "gaps in the chart" the user reported (vitals coverage was ~58%).
-//
-//   2. Sleep-onset / sleep-offset detection. Walks the timeline to find the
-//      first sustained "calm" window (HR near baseline AND low movement) —
-//      that's when you actually fell asleep, not when you got into bed.
-//      Everything before onset and after offset is reclassified as 'awake'.
-//      Without this, lying in bed watching TV reads as REM (elevated HR)
-//      and inflates "Time slept".
-//
-//   3. Per-epoch fall-through is unchanged for actually-asleep buckets:
-//      DEEP / REM / LIGHT decided by HR vs baseline, breathing, and HR-delta.
-//
-// Approach (still no ML, fully deterministic):
-//   - baselineHR = 10th-percentile HR across the night = "deep sleep HR"
-//   - calmMoveThreshold = 50th percentile of bucket movement = "low restless"
-//   - sleep onset = first epoch where (HR ≤ baseline+5) AND (movement < calm)
-//     stays true for ≥3 consecutive epochs (~15 min)
-//
-// Validation against polysomnography would require data we don't have, so
-// think of these stages as "informed guesses" — the kind a sleep watch makes.
 const BUCKET_SECONDS = 300;
 const SLEEP_HR_DELTA_BPM = 5;
 const ONSET_REQUIRED_CALM_BUCKETS = 3; // 15 min of sustained calm = real sleep
-function classifyStages(vitals, movements, periodStart, periodEnd) {
+export function median(values) {
+    const valid = values.filter((v) => v !== null && v > 0).sort((a, b) => a - b);
+    const mid = Math.floor(valid.length / 2);
+    return valid.length ? (valid[mid] + valid[Math.floor((valid.length - 1) / 2)]) / 2 : null;
+}
+export function classifyStages(vitals, movements, periodStart, periodEnd) {
     // Build vitals lookup by 5-min bucket
     const vitalByBucket = new Map();
     for (const v of vitals) {
-        const bucket = Math.floor(v.timestamp / BUCKET_SECONDS) * BUCKET_SECONDS;
-        if (!vitalByBucket.has(bucket))
-            vitalByBucket.set(bucket, v);
+        const key = Math.floor(v.timestamp / BUCKET_SECONDS) * BUCKET_SECONDS;
+        const rows = vitalByBucket.get(key) ?? [];
+        rows.push(v);
+        vitalByBucket.set(key, rows);
     }
     // Build movement lookup by 5-min bucket
     const moveByBucket = new Map();
@@ -85,15 +65,14 @@ function classifyStages(vitals, movements, periodStart, periodEnd) {
     const startBucket = Math.floor(periodStart / BUCKET_SECONDS) * BUCKET_SECONDS;
     const endBucket = Math.ceil(periodEnd / BUCKET_SECONDS) * BUCKET_SECONDS;
     const working = [];
-    let lastClassifiedSleepStage = 'light';
     for (let b = startBucket; b < endBucket; b += BUCKET_SECONDS) {
-        const v = vitalByBucket.get(b);
+        const rows = vitalByBucket.get(b) ?? [];
         const movement = moveByBucket.get(b) ?? 0;
-        const hr = v?.heart_rate ?? null;
-        const br = v?.breathing_rate ?? null;
-        const hrv = v?.hrv ?? null;
+        const hr = median(rows.map(v => v.heart_rate));
+        const br = median(rows.map(v => v.breathing_rate));
+        const hrv = median(rows.map(v => v.hrv));
         const hrCalm = hr !== null && hr <= baselineHR + SLEEP_HR_DELTA_BPM;
-        const moveCalm = movement < calmMoveThreshold;
+        const moveCalm = moveByBucket.has(b) && movement <= calmMoveThreshold;
         const isCalm = hrCalm && moveCalm;
         // HRV-driven signal (only meaningful when the per-night HRV spread is
         // reasonable — see hrvSpreadOk above). hrvLow is intentionally unused
@@ -105,11 +84,8 @@ function classifyStages(vitals, movements, periodStart, periodEnd) {
         if (movement >= moveThreshold && movement > 50) {
             stage = 'awake';
         }
-        else if (hr === null) {
-            // No vitals this bucket — carry forward the previous sleep stage if
-            // movement is low; otherwise treat as light. Avoids leaving holes in
-            // the chart while not fabricating "deep sleep" through restless gaps.
-            stage = moveCalm ? lastClassifiedSleepStage : 'light';
+        else if (hr === null || !moveByBucket.has(b)) {
+            stage = 'unknown';
         }
         else if (hr <= baselineHR + 2 && !hrvHigh) {
             // DEEP: low HR (near baseline) and HRV is NOT in the upper quartile.
@@ -132,8 +108,6 @@ function classifyStages(vitals, movements, periodStart, periodEnd) {
             // matches normal sleep architecture (Light = 50-60% of total sleep).
             stage = 'light';
         }
-        if (stage !== 'awake')
-            lastClassifiedSleepStage = stage;
         working.push({ bucket: b, movement, hr, br, hrv, isCalm, stage });
     }
     // Sleep-onset detection: first run of ≥ONSET_REQUIRED_CALM_BUCKETS consecutive
@@ -171,7 +145,7 @@ function classifyStages(vitals, movements, periodStart, periodEnd) {
     let offsetIdx = working.length;
     let sleepRun = 0;
     for (let i = working.length - 1; i >= 0; i--) {
-        if (working[i].stage !== 'awake') {
+        if (working[i].stage !== 'awake' && working[i].stage !== 'unknown') {
             sleepRun++;
             if (sleepRun >= OFFSET_REQUIRED_SLEEP_BUCKETS) {
                 // First epoch AFTER the sustained sleep block, walking forward.
@@ -188,9 +162,11 @@ function classifyStages(vitals, movements, periodStart, periodEnd) {
     // the per-epoch heuristic is the best we have.
     if (onsetIdx >= 0) {
         for (let i = 0; i < onsetIdx; i++)
-            working[i].stage = 'awake';
+            if (working[i].stage !== 'unknown')
+                working[i].stage = 'awake';
         for (let i = offsetIdx; i < working.length; i++)
-            working[i].stage = 'awake';
+            if (working[i].stage !== 'unknown')
+                working[i].stage = 'awake';
     }
     return working.map((w) => ({
         startUnix: w.bucket,
@@ -236,11 +212,12 @@ router.get('/sleep-stages', async (req, res) => {
     }))
         .filter((e) => e.endUnix > e.startUnix);
     // Roll up totals per stage
-    const totals = { awake: 0, rem: 0, light: 0, deep: 0 };
+    const totals = { awake: 0, rem: 0, light: 0, deep: 0, unknown: 0 };
     for (const e of epochs)
         totals[e.stage] += e.endUnix - e.startUnix;
     const totalSeconds = Object.values(totals).reduce((a, b) => a + b, 0) || 1;
     const percentages = {
+        unknown: Math.round(totals.unknown / totalSeconds * 100),
         awake: Math.round((totals.awake / totalSeconds) * 100),
         rem: Math.round((totals.rem / totalSeconds) * 100),
         light: Math.round((totals.light / totalSeconds) * 100),

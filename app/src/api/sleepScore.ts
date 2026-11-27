@@ -9,7 +9,8 @@ export type SleepScoreComponent = {
 };
 
 export type SleepScore = {
-  score: number;
+  score: number | null;
+  coverage: number;
   components: {
     duration: SleepScoreComponent;
     continuity: SleepScoreComponent;

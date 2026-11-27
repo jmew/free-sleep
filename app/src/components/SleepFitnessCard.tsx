@@ -153,16 +153,16 @@ export default function SleepFitnessCard({ sleepRecord }: Props) {
 
   const detectedSleepWindow = useMemo(() => {
     if (!stagesData || stagesData.epochs.length === 0) return null;
-    const firstSleep = stagesData.epochs.find((e) => e.stage !== 'awake');
+    const firstSleep = stagesData.epochs.find((e) => e.stage !== 'awake' && e.stage !== 'unknown');
     let lastSleep: typeof stagesData.epochs[number] | undefined;
     for (let i = stagesData.epochs.length - 1; i >= 0; i--) {
-      if (stagesData.epochs[i].stage !== 'awake') {
+      if (!['unknown', 'awake'].includes(stagesData.epochs[i].stage)) {
         lastSleep = stagesData.epochs[i];
         break;
       }
     }
     if (!firstSleep || !lastSleep) return null;
-    const sleptSeconds = Math.max(0, stagesData.totalSeconds - (stagesData.totals.awake || 0));
+    const sleptSeconds = Math.max(0, stagesData.totalSeconds - (stagesData.totals.awake || 0) - (stagesData.totals.unknown || 0));
     return {
       onsetIso: moment.unix(firstSleep.startUnix).toISOString(),
       offsetIso: moment.unix(lastSleep.endUnix).toISOString(),
@@ -192,7 +192,8 @@ export default function SleepFitnessCard({ sleepRecord }: Props) {
 
       { !isFetching && sleepScore && (
         <>
-          <ArcGauge score={ score } color={ color }/>
+           {sleepScore.score == null ? <Typography align="center">Insufficient sleep data</Typography> : <ArcGauge score={ score } color={ color }/>}
+          <Typography align="center">Measured {Math.round(sleepScore.coverage * 100)}% · In bed {formatDuration(sleepRecord.entered_bed_at, sleepRecord.left_bed_at)}</Typography>
 
           <Box
             sx={ {
@@ -214,7 +215,7 @@ export default function SleepFitnessCard({ sleepRecord }: Props) {
               value={
                 detectedSleepWindow
                   ? formatHM(detectedSleepWindow.sleptSeconds)
-                  : formatDuration(sleepRecord.entered_bed_at, sleepRecord.left_bed_at)
+                  : '—'
               }
               dotColor={ duration?.available ? scoreColor(duration.score) : undefined }
             />

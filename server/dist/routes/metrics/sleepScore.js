@@ -1,6 +1,7 @@
 import express from 'express';
 import moment from 'moment-timezone';
 import { prisma } from '../../db/prisma.js';
+import { classifyStages, median } from './sleepStages.js';
 const router = express.Router();
 // --- Component scorers (each returns 0-100) ---
 function scoreDuration(seconds) {
@@ -13,29 +14,18 @@ function scoreContinuity(timesExited) {
     // 0 exits = 100, -15 per exit, floor at 0
     return Math.max(0, 100 - timesExited * 15);
 }
-function scoreHrv(avgHrv) {
-    // Bands tuned for sleep HRV (RMSSD-ish, ms)
-    if (avgHrv >= 70)
-        return 95;
-    if (avgHrv >= 50)
-        return 85;
-    if (avgHrv >= 30)
-        return 70;
-    return 50;
-}
-function scoreRestingHr(minHr) {
-    // Lower min HR during sleep = deeper rest
-    if (minHr === 0)
-        return 0;
-    if (minHr < 55)
-        return 95;
-    if (minHr < 65)
-        return 85;
-    if (minHr < 75)
-        return 70;
-    if (minHr < 85)
-        return 55;
-    return 40;
+function sustainedRestingHr(rows) {
+    const bins = new Map();
+    for (const row of rows) {
+        if (!row.heart_rate)
+            continue;
+        const key = Math.floor(row.timestamp / 300);
+        if (!bins.has(key))
+            bins.set(key, []);
+        bins.get(key).push(row.heart_rate);
+    }
+    const sustained = Array.from(bins.values()).filter(b => b.length >= 3).map(b => median(b));
+    return sustained.length ? Math.min(...sustained) : 0;
 }
 function formatHours(seconds) {
     const h = Math.floor(seconds / 3600);
@@ -65,42 +55,70 @@ router.get('/sleep-score', async (req, res) => {
         side,
         timestamp: { gte: startUnix, lte: endUnix },
     };
-    const hrAgg = await prisma.vitals.aggregate({
-        where: vitalsQuery,
-        _min: { heart_rate: true },
-    });
-    const hrvAgg = await prisma.vitals.aggregate({
-        where: { ...vitalsQuery, hrv: { not: 0, lte: 120, gte: 30 } },
-        _avg: { hrv: true },
-    });
-    const durationSec = sleepRecord?.sleep_period_seconds ?? endUnix - startUnix;
+    const [vitals, movements, history] = await Promise.all([
+        prisma.vitals.findMany({ where: vitalsQuery }),
+        prisma.movement.findMany({ where: { side, timestamp: { gte: startUnix, lt: endUnix } } }),
+        prisma.vitals.findMany({ where: { side, timestamp: { gte: startUnix - 28 * 86400, lt: startUnix } },
+            select: { timestamp: true, hrv: true, heart_rate: true } }),
+    ]);
+    const epochs = classifyStages(vitals, movements, startUnix, endUnix);
+    let durationSec = 0;
+    let measured = 0;
+    for (const e of epochs) {
+        const seconds = Math.min(endUnix, e.endUnix) - Math.max(startUnix, e.startUnix);
+        if (e.stage === 'unknown')
+            continue;
+        measured += seconds;
+        if (e.stage !== 'awake')
+            durationSec += seconds;
+    }
+    const coverage = measured / Math.max(1, endUnix - startUnix);
     const exits = sleepRecord?.times_exited_bed ?? 0;
-    const minHr = hrAgg._min.heart_rate ?? 0;
-    const avgHrv = hrvAgg._avg.hrv ?? 0;
+    const avgHrv = median(vitals.map(v => v.hrv));
+    const days = new Map();
+    for (const v of history) {
+        if (!v.hrv)
+            continue;
+        const day = Math.floor(v.timestamp / 86400);
+        if (!days.has(day))
+            days.set(day, []);
+        days.get(day).push(v.hrv);
+    }
+    const typical = days.size >= 7 ? median(Array.from(days.values(), median)) : null;
+    const minHr = sustainedRestingHr(vitals);
+    const hrDays = new Map();
+    for (const row of history) {
+        const day = Math.floor(row.timestamp / 86400);
+        if (!hrDays.has(day))
+            hrDays.set(day, []);
+        hrDays.get(day).push(row);
+    }
+    const dailyRest = Array.from(hrDays.values(), sustainedRestingHr).filter(v => v > 0);
+    const typicalHr = dailyRest.length >= 7 ? median(dailyRest) : null;
     const components = {
         duration: {
             score: scoreDuration(durationSec),
             weight: 0.4,
             value: formatHours(durationSec),
-            available: true,
+            available: !!sleepRecord && coverage >= 0.8,
         },
         continuity: {
             score: scoreContinuity(exits),
             weight: 0.3,
             value: `${exits} ${exits === 1 ? 'exit' : 'exits'}`,
-            available: true,
+            available: !!sleepRecord,
         },
         hrv: {
-            score: scoreHrv(avgHrv),
+            score: typical && avgHrv ? Math.round(100 * Math.min(1, avgHrv / typical)) : 0,
             weight: 0.15,
-            value: avgHrv > 0 ? `${Math.round(avgHrv)} ms` : '—',
-            available: avgHrv > 0,
+            value: avgHrv ? `${Math.round(avgHrv)} ms` : '—',
+            available: !!avgHrv && !!typical,
         },
         restingHr: {
-            score: scoreRestingHr(minHr),
+            score: typicalHr && minHr ? Math.round(100 * Math.min(1, typicalHr / minHr)) : 0,
             weight: 0.15,
             value: minHr > 0 ? `${Math.round(minHr)} bpm` : '—',
-            available: minHr > 0,
+            available: !!typicalHr && minHr > 0,
         },
     };
     // Reweight: distribute missing components' weight proportionally across present ones.
@@ -114,8 +132,8 @@ router.get('/sleep-score', async (req, res) => {
         const adjustedWeight = c.weight / totalAvailableWeight;
         weightedSum += c.score * adjustedWeight;
     }
-    const score = Math.round(weightedSum);
-    return res.json({ score, components });
+    const score = sleepRecord && coverage >= 0.8 ? Math.round(weightedSum) : null;
+    return res.json({ score, coverage, components });
 });
 export default router;
 //# sourceMappingURL=sleepScore.js.map

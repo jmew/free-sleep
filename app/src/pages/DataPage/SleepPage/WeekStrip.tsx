@@ -46,8 +46,8 @@ function DayDot({ day, letter, isActive, isFuture, record, onClick }: DayDotProp
     },
     !!record,
   );
-  const color = scoreColor(score?.score);
-  const hasData = !!record && !!score;
+  const color = scoreColor(score?.score ?? undefined);
+  const hasData = !!record && score?.score != null;
   const isToday = day.isSame(moment(), 'day');
 
   return (
